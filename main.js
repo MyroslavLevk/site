@@ -19,6 +19,14 @@
 
     // size the wordmark so it spans the stage exactly, edge to edge
     const fit = () => {
+      // the drone glyph takes the cap height and V width of whatever font the wordmark uses
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = `800 100px ${getComputedStyle(wordmark).fontFamily}`;
+      const cap = ctx.measureText('N').actualBoundingBoxAscent / 100;
+      if (cap > 0) {
+        wordmark.style.setProperty('--cap', cap.toFixed(3));
+        wordmark.style.setProperty('--vw', (ctx.measureText('V').width / 100).toFixed(3));
+      }
       wordmark.style.fontSize = '100px';
       const natural = wordmark.firstElementChild.getBoundingClientRect().width;
       const byWidth = 100 * wordmark.clientWidth / natural;
@@ -94,7 +102,7 @@
       if (!e.isIntersecting) return;
       lazy.disconnect();
       load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
-        .then(() => load('game3d.js?v=4'))
+        .then(() => load('game3d.js?v=5'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

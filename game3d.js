@@ -129,72 +129,143 @@
   ground.receiveShadow = true;
   scene.add(ground);
 
+  /* ----- flight route: a smooth curve over distance travelled. Lateral velocity and
+     acceleration come from its derivatives, so the motion is continuous by construction. ----- */
+  let dist = 0;
+  const pathX = (s) => 8 * Math.sin(s / 70) + 3 * Math.sin(s / 31 + 1.3);
+  const pathD1 = (s) => 8 / 70 * Math.cos(s / 70) + 3 / 31 * Math.cos(s / 31 + 1.3);
+  const pathD2 = (s) => -8 / 4900 * Math.sin(s / 70) - 3 / 961 * Math.sin(s / 31 + 1.3);
+
   /* ----- obstacles: five classes, pooled and recycled ----- */
   const std = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.95 }, extra));
   const mats = {
-    bark: std(0x4a3526),
-    pine: [0x2f5a3a, 0x27503a, 0x3a6a3f].map((c) => std(c, { flatShading: true })),
-    leaf: [0x4f7a34, 0x5d8a3a].map((c) => std(c, { flatShading: true })),
+    bark: std(0x3f2d20),
+    pine: [0x2a5236, 0x234a34, 0x35623b, 0x1f4030].map((c) => std(c, { flatShading: true })),
+    leaf: [0x4f7a34, 0x5d8a3a, 0x436b2e].map((c) => std(c, { flatShading: true })),
     rock: std(0x7b7f85, { flatShading: true }),
     steel: std(0x8c9299, { metalness: 0.7, roughness: 0.45 }),
+    lattice: std(0x8c9299, { metalness: 0.7, roughness: 0.45, wireframe: true }),
+    wall: std(0xd8d2c4),
+    roof: std(0x7a3b2e, { flatShading: true }),
+    brick: std(0x8a4a3a),
     concrete: std(0x9a9a96),
     dark: std(0x2a2c30),
+    glass: std(0x1a1c20, { roughness: 0.2, emissive: 0xffc66b, emissiveIntensity: 0 }), // lit at night
     beacon: new THREE.MeshBasicMaterial({ color: 0xff3030, fog: false }),
   };
+
+  // Displace vertices by a hash of their position: shared corners move together, so
+  // the mesh stays watertight while losing its perfect, computer-made silhouette.
+  const rough = (g, amt, seed) => {
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const h = (n) => { const s = Math.sin(x * 12.9898 * n + y * 78.233 + z * 37.719 * n + seed) * 43758.5453; return s - Math.floor(s) - 0.5; };
+      p.setXYZ(i, x + h(1) * amt, y + h(2) * amt * 0.6, z + h(3) * amt);
+    }
+    g.computeVertexNormals();
+    return g;
+  };
+  const PINE_TIERS = [[2.0, 1.9, 2.3], [1.75, 1.8, 3.4], [1.45, 1.7, 4.5], [1.15, 1.6, 5.5], [0.85, 1.5, 6.4], [0.5, 1.5, 7.3]]; // radius, height, y
   const geo = {
-    trunk: new THREE.CylinderGeometry(0.18, 0.3, 2.4, 7),
-    tiers: [[1.6, 2.4, 2.4], [1.3, 2.2, 3.6], [1.0, 2.0, 4.7], [0.65, 1.8, 5.7]] // radius, height, y
-      .map(([r, h, y]) => ({ g: new THREE.ConeGeometry(r, h, 9), y })),
-    oakTrunk: new THREE.CylinderGeometry(0.25, 0.4, 3.2, 7),
-    crown: new THREE.IcosahedronGeometry(1.7, 1),
-    rock: new THREE.DodecahedronGeometry(0.9, 0),
-    mast: new THREE.BoxGeometry(0.4, 18, 0.4),
-    arm: new THREE.BoxGeometry(3.2, 0.16, 0.16),
+    pineTrunk: new THREE.CylinderGeometry(0.14, 0.34, 4, 8),
+    tiers: PINE_TIERS.map(([r, h, y], i) => ({ g: rough(new THREE.ConeGeometry(r, h, 11), 0.3, i), y })),
+    oakTrunk: new THREE.CylinderGeometry(0.28, 0.46, 3.4, 8),
+    branch: new THREE.CylinderGeometry(0.09, 0.16, 2.2, 6),
+    crowns: [1, 2, 3].map((s) => rough(new THREE.IcosahedronGeometry(1.5, 1), 0.45, s)),
+    rocks: [1, 2, 3].map((s) => rough(new THREE.IcosahedronGeometry(0.9, 1), 0.4, s * 7)),
+    lattice: new THREE.CylinderGeometry(0.22, 1.2, 18, 4, 9, true),
+    arm: new THREE.BoxGeometry(3.8, 0.12, 0.12),
+    insulator: new THREE.CylinderGeometry(0.06, 0.06, 0.7, 6),
     beacon: new THREE.SphereGeometry(0.2, 8, 8),
-    hall: new THREE.BoxGeometry(5, 3.6, 4),
-    annex: new THREE.BoxGeometry(2.4, 2.2, 3),
-    door: new THREE.BoxGeometry(1, 2, 0.1),
+    house: new THREE.BoxGeometry(6, 3.2, 5),
+    roof: new THREE.CylinderGeometry(0, 1, 1, 4).rotateY(Math.PI / 4), // pyramid, scaled per use
+    chimney: new THREE.BoxGeometry(0.5, 1.5, 0.5),
+    garage: new THREE.BoxGeometry(2.6, 2.2, 3.6),
+    door: new THREE.BoxGeometry(1, 2, 0.08),
+    gate: new THREE.BoxGeometry(2, 1.7, 0.08),
+    window: new THREE.BoxGeometry(1.1, 1, 0.08),
   };
   const part = (parent, g, m, x, y, z) => {
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     parent.add(mesh);
     return mesh;
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-  // label, half-width the planner must clear, height, model builder
+  // label, half-width the route must clear (crown / walls, not just the trunk), height, model builder
   const CLASSES = {
-    pine: { label: 'PINE', w: 1.6, h: 6.6, build(t) {
-      part(t, geo.trunk, mats.bark, 0, 1.2, 0);
-      const m = pick(mats.pine);
-      geo.tiers.forEach(({ g, y }) => part(t, g, m, 0, y, 0));
+    pine: { label: 'PINE', w: 2.1, h: 8.1, build(t) {
+      part(t, geo.pineTrunk, mats.bark, 0, 2, 0);
+      const a = pick(mats.pine), b = pick(mats.pine);
+      geo.tiers.forEach(({ g, y }, i) => { part(t, g, i % 2 ? a : b, 0, y, 0).rotation.y = rand(0, 6); });
     } },
-    tree: { label: 'TREE', w: 2.4, h: 6.2, build(t) {
-      part(t, geo.oakTrunk, mats.bark, 0, 1.6, 0);
-      const m = pick(mats.leaf);
-      part(t, geo.crown, m, 0, 4.3, 0);
-      part(t, geo.crown, m, 1.0, 3.7, 0.4).scale.setScalar(0.7);
-      part(t, geo.crown, m, -0.9, 3.9, -0.5).scale.setScalar(0.75);
+    tree: { label: 'TREE', w: 3.0, h: 7.2, build(t) {
+      part(t, geo.oakTrunk, mats.bark, 0, 1.7, 0);
+      part(t, geo.branch, mats.bark, 0.6, 3.6, 0).rotation.z = -0.7;
+      part(t, geo.branch, mats.bark, -0.6, 3.7, 0.2).rotation.z = 0.7;
+      [[0, 5, 0, 1], [1.3, 4.4, 0.3, 0.75], [-1.2, 4.5, -0.4, 0.8], [0.2, 4.3, 1.2, 0.7], [-0.3, 4.6, -1.2, 0.7], [0, 6, 0, 0.7]]
+        .forEach(([x, y, z, s], i) => {
+          const m = part(t, geo.crowns[i % 3], mats.leaf[i % 3], x, y, z);
+          m.scale.setScalar(s);
+          m.rotation.y = rand(0, 6);
+        });
     } },
-    rock: { label: 'ROCK', w: 1.2, h: 1.0, build(t) {
-      part(t, geo.rock, mats.rock, 0, 0.4, 0).scale.set(1.3, 0.75, 1);
+    rock: { label: 'ROCK', w: 1.3, h: 1.0, build(t) {
+      part(t, pick(geo.rocks), mats.rock, 0, 0.35, 0).scale.set(1.3, 0.75, 1);
+      part(t, pick(geo.rocks), mats.rock, 0.9, 0.15, 0.4).scale.setScalar(0.45);
     } },
-    mast: { label: 'MAST', w: 1.7, h: 18.4, build(t) {
-      part(t, geo.mast, mats.steel, 0, 9, 0);
-      part(t, geo.arm, mats.steel, 0, 14, 0);
-      part(t, geo.arm, mats.steel, 0, 16.5, 0);
+    mast: { label: 'MAST', w: 2.2, h: 18.4, build(t) {
+      part(t, geo.lattice, mats.lattice, 0, 9, 0);
+      [13.5, 16].forEach((y) => {
+        part(t, geo.arm, mats.steel, 0, y, 0);
+        part(t, geo.insulator, mats.dark, -1.7, y - 0.4, 0);
+        part(t, geo.insulator, mats.dark, 1.7, y - 0.4, 0);
+      });
       part(t, geo.beacon, mats.beacon, 0, 18.2, 0).add(glow(0xff3030, 3));
     } },
-    structure: { label: 'STRUCTURE', w: 3.9, h: 3.6, build(t) {
-      part(t, geo.hall, mats.concrete, 0, 1.8, 0);
-      part(t, geo.annex, mats.concrete, 3.4, 1.1, 0.3);
-      part(t, geo.door, mats.dark, -1, 1, 2.01);
+    building: { label: 'BUILDING', w: 5.6, h: 5.4, build(t) {
+      part(t, geo.house, mats.wall, -0.8, 1.6, 0);
+      part(t, geo.roof, mats.roof, -0.8, 4.3, 0).scale.set(4.8, 2.2, 4.1);
+      part(t, geo.chimney, mats.brick, 0.8, 4.7, -0.8);
+      part(t, geo.door, mats.dark, -2.2, 1, 2.52);
+      part(t, geo.window, mats.glass, -0.4, 1.8, 2.52);
+      part(t, geo.window, mats.glass, 1.2, 1.8, 2.52);
+      part(t, geo.window, mats.glass, -3.82, 1.8, 0).rotation.y = Math.PI / 2;
+      part(t, geo.garage, mats.concrete, 3.5, 1.1, 0.4);
+      part(t, geo.gate, mats.dark, 3.5, 0.85, 2.22);
     } },
   };
-  const DEPTH = 190, FIELD = 26, CRUISE_ALT = 2.9;
+
+  const DEPTH = 190, FIELD = 28, CRUISE_ALT = 2.9, MARGIN = 1.8; // margin = airframe half-span + safety
   const objects = [];
+  // is an object of half-width w at (x, z) clear of the route, across its whole depth?
+  const clear = (x, z, w) => {
+    for (let dz = -5; dz <= 5; dz += 2.5) if (Math.abs(x - pathX(dist - z + dz)) < w + MARGIN) return false;
+    return true;
+  };
+  function place(t, z) {
+    const c = t.userData.cls;
+    const fixed = c === CLASSES.mast || c === CLASSES.building;
+    const s = fixed ? 1 : rand(0.8, 1.35);
+    const w = c.w * s, h = c.h * s;
+    const avoid = h > CRUISE_ALT - 1.2; // low objects are overflown
+    let x = rand(-FIELD, FIELD);
+    if (avoid) {
+      // nearly half of the obstacles stand right beside the route, so it visibly bends around them
+      const px = pathX(dist - z), side = Math.random() < 0.5 ? -1 : 1;
+      if (Math.random() < 0.45) x = px + side * (w + MARGIN + rand(0.4, 3.5));
+      for (let i = 0; i < 24 && !clear(x, z, w); i++) x = rand(-FIELD, FIELD);
+      if (!clear(x, z, w)) x = px + side * (w + MARGIN + 7);
+    }
+    t.scale.setScalar(s);
+    t.rotation.y = fixed ? rand(-0.3, 0.3) : rand(0, Math.PI * 2);
+    t.position.set(x, 0, z);
+    Object.assign(t.userData, { w, h, avoid, conf: rand(0.84, 0.95) });
+  }
   const spawn = (type, n) => {
     for (let i = 0; i < n; i++) {
       const t = new THREE.Group();
@@ -205,19 +276,7 @@
       scene.add(t);
     }
   };
-  function place(t, z) {
-    const c = t.userData.cls;
-    const fixed = c === CLASSES.mast || c === CLASSES.structure;
-    const s = fixed ? 1 : rand(0.8, 1.45);
-    t.scale.setScalar(s);
-    t.rotation.y = fixed ? rand(-0.3, 0.3) : rand(0, Math.PI * 2);
-    t.position.set(rand(-FIELD, FIELD), 0, z);
-    t.userData.w = c.w * s;   // crown / foliage width counts, not just the trunk
-    t.userData.h = c.h * s;
-    t.userData.avoid = t.userData.h > CRUISE_ALT - 1.2; // low objects are overflown
-    t.userData.conf = rand(0.84, 0.95);
-  }
-  spawn('pine', 34); spawn('tree', 14); spawn('rock', 16); spawn('mast', 3); spawn('structure', 4);
+  spawn('pine', 28); spawn('tree', 11); spawn('rock', 14); spawn('mast', 3); spawn('building', 4);
 
   /* ----- drifting particles: fireflies at night, pollen by day ----- */
   const DUST = 260;
@@ -244,6 +303,7 @@
     sun.color.set(day ? 0xfff0d2 : 0xa9bcff);
     sun.intensity = day ? 1.5 : 0.55;
     head.intensity = day ? 0 : 1.7;
+    mats.glass.emissiveIntensity = day ? 0 : 1.3;
     groundMat.color.set(day ? 0x7f8f63 : 0x26302a);
     ridgeMat.color.set(day ? 0x9fb3c4 : 0x0c1222);
     disc.material.color.set(day ? 0xfff0c0 : 0xe6ecff);
@@ -260,54 +320,23 @@
   document.addEventListener('themechange', applyTheme);
 
   /* ----- autopilot ----- */
-  let speed = 18, dist = 0, time = 0, last = 0, raf = 0, visible = false;
-  let goal = 0, gs = 0, s1 = 0, s2 = 0, s3 = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
-  camera.position.set(0, CRUISE_ALT, 0);
-
-  // cost of holding lateral position x over the next ~8 seconds of flight
-  function costAt(x) {
-    let cost = Math.abs(x) * 0.03 + Math.abs(x - camera.position.x) * 0.1;
-    for (const o of objects) {
-      const d = -o.position.z;
-      if (!o.userData.avoid || d < -2 || d > 150) continue;
-      const gap = Math.abs(x - o.position.x) - (o.userData.w + 1.6); // 1.6 = airframe + margin
-      const near = 1 / (1 + d / 60);
-      cost += gap < 0 ? 120 * near : 4 * Math.exp(-gap) * near;
-    }
-    return cost;
-  }
-  // The planner commits: it keeps the current route unless another one is clearly better.
-  function plan() {
-    let best = goal, bestCost = costAt(goal) - 1.5;
-    for (let x = -15; x <= 15; x += 0.5) {
-      const c = costAt(x);
-      if (c < bestCost) { bestCost = c; best = x; }
-    }
-    goal = best;
-  }
+  let speed = 17, time = 0, last = 0, raf = 0, visible = false;
+  let vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
+  camera.position.set(pathX(0), CRUISE_ALT, 0);
 
   function update(dt) {
     time += dt;
     speed = 17 + Math.sin(time * 0.12) * 1.5;
     dist += speed * dt;
-    planT -= dt;
-    if (planT <= 0) { planT = 0.3; plan(); }
 
-    // Flight path: the route decision passes through three cascaded low-pass filters,
-    // so position, velocity AND acceleration are all continuous. The result is the
-    // long S-curve a real airframe flies, with no snaps and no overshoot.
-    // The decision itself may flip at any moment, so it is first slewed at a walking pace.
-    const TAU = 1.2, SLEW = 2.6, k = 1 - Math.exp(-dt / TAU);
-    gs += clamp(goal - gs, -SLEW * dt, SLEW * dt);
-    s1 += (gs - s1) * k;
-    s2 += (s1 - s2) * k;
-    s3 += (s2 - s3) * k;
-    camera.position.x = s3;
-    vx = (s2 - s3) / TAU;
-    ax = (s1 - 2 * s2 + s3) / (TAU * TAU);
+    // The drone follows the route exactly. Obstacles are only ever placed clear of it
+    // (see place()), so it cannot fly through a crown or a wall.
+    camera.position.x = pathX(dist);
+    vx = pathD1(dist) * speed;
+    ax = pathD2(dist) * speed * speed;
     camera.position.y = CRUISE_ALT + Math.sin(time * 0.4) * 0.12;
     // bank angle follows lateral acceleration (coordinated turn); nose follows the velocity vector
-    roll += (-Math.atan(ax / 9.81) * 1.5 - roll) * Math.min(1, dt * 1.5);
+    roll += (-Math.atan(ax / 9.81) * 1.5 - roll) * Math.min(1, dt * 2);
     camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30);
     camera.rotateZ(roll);
     camera.fov = 62;
@@ -362,9 +391,8 @@
     h2.setLineDash([6, 6]);
     h2.beginPath();
     let pen = false;
-    for (let d = 4; d <= 46; d += 3) {
-      const k = Math.min(1, d / 30), ease = k * k * (3 - 2 * k);
-      const s = toScreen(camera.position.x + (s1 - camera.position.x) * ease, 0.05, -d);
+    for (let d = 4; d <= 70; d += 3) {
+      const s = toScreen(pathX(dist + d), 0.05, -d);
       if (!s) continue;
       if (pen) h2.lineTo(s[0], s[1]); else { h2.moveTo(s[0], s[1]); pen = true; }
     }
@@ -383,7 +411,7 @@
       const y0 = Math.max(Math.min(a[1], b[1]), -20), y1 = Math.max(a[1], b[1]);
       if (x1 < 0 || x0 > W) continue;
       tracked++;
-      const threat = o.userData.avoid && Math.abs(o.position.x - camera.position.x) < o.userData.w + 2.2;
+      const threat = o.userData.avoid && Math.abs(o.position.x - pathX(dist + d)) < o.userData.w + MARGIN + 2.5;
       const col = threat ? colors.accent : colors.ink;
       h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat ? 1 : 0.6);
       h2.strokeStyle = h2.fillStyle = col;
