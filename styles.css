@@ -1,25 +1,25 @@
 /* ---------- tokens ---------- */
 :root {
-  --bg: #0a0b0d;
-  --bg-2: #111317;
-  --fg: #f2f1ec;
-  --muted: #8b8e96;
-  --line: rgba(255, 255, 255, .1);
+  --bg: #11140e;
+  --bg-2: #191e15;
+  --fg: #e9e6d6;
+  --muted: #8f937d;
+  --line: rgba(233, 230, 214, .12);
   --accent: #ff5b1f;
-  --glass: rgba(10, 11, 13, .6);
+  --glass: rgba(17, 20, 14, .62);
   --radius: 20px;
   --pad: clamp(16px, 4vw, 56px);
   --ease: cubic-bezier(.2, .7, .1, 1);
   --p: 0; /* hero scroll progress, set from JS */
 }
 :root[data-theme="light"] {
-  --bg: #f2f1ec;
-  --bg-2: #e9e7e0;
-  --fg: #0a0b0d;
-  --muted: #6a6c72;
-  --line: rgba(0, 0, 0, .12);
+  --bg: #e7e3d1;
+  --bg-2: #dbd6c0;
+  --fg: #161a12;
+  --muted: #6a6e5a;
+  --line: rgba(22, 26, 18, .16);
   --accent: #e8450a;
-  --glass: rgba(242, 241, 236, .65);
+  --glass: rgba(231, 227, 209, .68);
 }
 
 /* ---------- base ---------- */

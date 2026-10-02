@@ -1,4 +1,4 @@
-/* Onboard-view simulation: an autonomous drone flies through terrain without GPS,
+/* Onboard-view simulation: an autonomous drone flies low over farmland without GPS,
    classifies obstacles and routes around them. Requires global THREE (r128). */
 (() => {
   const box = document.getElementById('game');
@@ -11,6 +11,7 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
   let renderer;
   try {
@@ -129,14 +130,7 @@
   ground.receiveShadow = true;
   scene.add(ground);
 
-  /* ----- flight route: a smooth curve over distance travelled. Lateral velocity and
-     acceleration come from its derivatives, so the motion is continuous by construction. ----- */
-  let dist = 0;
-  const pathX = (s) => 8 * Math.sin(s / 70) + 3 * Math.sin(s / 31 + 1.3);
-  const pathD1 = (s) => 8 / 70 * Math.cos(s / 70) + 3 / 31 * Math.cos(s / 31 + 1.3);
-  const pathD2 = (s) => -8 / 4900 * Math.sin(s / 70) - 3 / 961 * Math.sin(s / 31 + 1.3);
-
-  /* ----- obstacles: five classes, pooled and recycled ----- */
+  /* ----- materials and geometry ----- */
   const std = (color, extra) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.95 }, extra));
   const mats = {
     bark: std(0x3f2d20),
@@ -145,10 +139,14 @@
     rock: std(0x7b7f85, { flatShading: true }),
     steel: std(0x8c9299, { metalness: 0.7, roughness: 0.45 }),
     lattice: std(0x8c9299, { metalness: 0.7, roughness: 0.45, wireframe: true }),
-    wall: std(0xd8d2c4),
-    roof: std(0x7a3b2e, { flatShading: true }),
-    brick: std(0x8a4a3a),
-    concrete: std(0x9a9a96),
+    // farmhouse walls and roofs come in several colours; each house picks a pair
+    walls: [0xe8dcc0, 0xb5c9d6, 0xd9b08c, 0xc7d3b0, 0xe3a587].map((c) => std(c)),
+    roofs: [0x7a3b2e, 0x4a5560, 0x5d6b3a].map((c) => std(c)),
+    barn: std(0x9c2f24),
+    barnRoof: std(0x3a3d42),
+    trim: std(0xf0ece0),
+    silo: std(0xb9bec4, { metalness: 0.6, roughness: 0.4 }),
+    hay: std(0xc9a94a),
     dark: std(0x2a2c30),
     glass: std(0x1a1c20, { roughness: 0.2, emissive: 0xffc66b, emissiveIntensity: 0 }), // lit at night
     beacon: new THREE.MeshBasicMaterial({ color: 0xff3030, fog: false }),
@@ -178,47 +176,50 @@
     arm: new THREE.BoxGeometry(3.8, 0.12, 0.12),
     insulator: new THREE.CylinderGeometry(0.06, 0.06, 0.7, 6),
     beacon: new THREE.SphereGeometry(0.2, 8, 8),
-    house: new THREE.BoxGeometry(6, 3.2, 5),
-    roof: new THREE.CylinderGeometry(0, 1, 1, 4).rotateY(Math.PI / 4), // pyramid, scaled per use
-    chimney: new THREE.BoxGeometry(0.5, 1.5, 0.5),
-    garage: new THREE.BoxGeometry(2.6, 2.2, 3.6),
-    door: new THREE.BoxGeometry(1, 2, 0.08),
-    gate: new THREE.BoxGeometry(2, 1.7, 0.08),
-    window: new THREE.BoxGeometry(1.1, 1, 0.08),
+    box: new THREE.BoxGeometry(1, 1, 1), // walls, doors, windows: scaled per use
+    // triangular prism, ridge along x: apex at y = 1, eaves at y = -0.5, z = +-0.866
+    gable: new THREE.CylinderGeometry(1, 1, 1, 3).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2),
+    siloBody: new THREE.CylinderGeometry(1.4, 1.4, 7, 16),
+    siloDome: new THREE.SphereGeometry(1.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    bale: new THREE.CylinderGeometry(0.7, 0.7, 1.2, 14).rotateZ(Math.PI / 2),
   };
-  const part = (parent, g, m, x, y, z) => {
+  const part = (parent, g, m, x, y, z, sx, sy, sz) => {
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set(x, y, z);
+    if (sx) mesh.scale.set(sx, sy, sz);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     parent.add(mesh);
     return mesh;
   };
-  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  // gable roof over a footprint of length l (x) and depth d (z), sitting on walls of height top
+  const roof = (t, m, x, top, l, d, rise) => part(t, geo.gable, m, x, top + rise / 3, 0, l + 0.5, rise / 1.5, (d / 2 + 0.35) / 0.866);
 
-  // label, half-width the route must clear (crown / walls, not just the trunk), height, model builder
+  /* ----- object classes.
+     w = radius the route must clear (crown / walls, not just the trunk); h = height;
+     low = flown over, never avoided; far = kept well away from the route (farmyards);
+     fixed = no random scale. ----- */
   const CLASSES = {
-    pine: { label: 'PINE', w: 2.1, h: 8.1, build(t) {
+    pine: { label: 'PINE', w: 2.1, h: 8.1, n: 44, build(t) {
       part(t, geo.pineTrunk, mats.bark, 0, 2, 0);
       const a = pick(mats.pine), b = pick(mats.pine);
       geo.tiers.forEach(({ g, y }, i) => { part(t, g, i % 2 ? a : b, 0, y, 0).rotation.y = rand(0, 6); });
     } },
-    tree: { label: 'TREE', w: 3.0, h: 7.2, build(t) {
+    tree: { label: 'TREE', w: 3.0, h: 7.2, n: 16, build(t) {
       part(t, geo.oakTrunk, mats.bark, 0, 1.7, 0);
       part(t, geo.branch, mats.bark, 0.6, 3.6, 0).rotation.z = -0.7;
       part(t, geo.branch, mats.bark, -0.6, 3.7, 0.2).rotation.z = 0.7;
       [[0, 5, 0, 1], [1.3, 4.4, 0.3, 0.75], [-1.2, 4.5, -0.4, 0.8], [0.2, 4.3, 1.2, 0.7], [-0.3, 4.6, -1.2, 0.7], [0, 6, 0, 0.7]]
-        .forEach(([x, y, z, s], i) => {
-          const m = part(t, geo.crowns[i % 3], mats.leaf[i % 3], x, y, z);
-          m.scale.setScalar(s);
-          m.rotation.y = rand(0, 6);
-        });
+        .forEach(([x, y, z, s], i) => { part(t, geo.crowns[i % 3], mats.leaf[i % 3], x, y, z, s, s, s).rotation.y = rand(0, 6); });
     } },
-    rock: { label: 'ROCK', w: 1.3, h: 1.0, build(t) {
-      part(t, pick(geo.rocks), mats.rock, 0, 0.35, 0).scale.set(1.3, 0.75, 1);
-      part(t, pick(geo.rocks), mats.rock, 0.9, 0.15, 0.4).scale.setScalar(0.45);
+    rock: { label: 'ROCK', w: 1.3, h: 1.0, n: 16, low: true, build(t) {
+      part(t, pick(geo.rocks), mats.rock, 0, 0.35, 0, 1.3, 0.75, 1);
+      part(t, pick(geo.rocks), mats.rock, 0.9, 0.15, 0.4, 0.45, 0.45, 0.45);
     } },
-    mast: { label: 'MAST', w: 2.2, h: 18.4, build(t) {
+    hay: { label: 'HAY BALE', w: 0.9, h: 1.4, n: 14, low: true, fixed: true, build(t) {
+      part(t, geo.bale, mats.hay, 0, 0.7, 0);
+    } },
+    mast: { label: 'PYLON', w: 2.2, h: 18.4, n: 3, fixed: true, build(t) {
       part(t, geo.lattice, mats.lattice, 0, 9, 0);
       [13.5, 16].forEach((y) => {
         part(t, geo.arm, mats.steel, 0, y, 0);
@@ -227,56 +228,174 @@
       });
       part(t, geo.beacon, mats.beacon, 0, 18.2, 0).add(glow(0xff3030, 3));
     } },
-    building: { label: 'BUILDING', w: 5.6, h: 5.4, build(t) {
-      part(t, geo.house, mats.wall, -0.8, 1.6, 0);
-      part(t, geo.roof, mats.roof, -0.8, 4.3, 0).scale.set(4.8, 2.2, 4.1);
-      part(t, geo.chimney, mats.brick, 0.8, 4.7, -0.8);
-      part(t, geo.door, mats.dark, -2.2, 1, 2.52);
-      part(t, geo.window, mats.glass, -0.4, 1.8, 2.52);
-      part(t, geo.window, mats.glass, 1.2, 1.8, 2.52);
-      part(t, geo.window, mats.glass, -3.82, 1.8, 0).rotation.y = Math.PI / 2;
-      part(t, geo.garage, mats.concrete, 3.5, 1.1, 0.4);
-      part(t, geo.gate, mats.dark, 3.5, 0.85, 2.22);
+    house: { label: 'FARMHOUSE', w: 3.9, h: 4.8, n: 4, far: true, fixed: true, build(t) {
+      part(t, geo.box, pick(mats.walls), 0, 1.4, 0, 5.4, 2.8, 4.2);
+      roof(t, pick(mats.roofs), 0, 2.8, 5.4, 4.2, 2);
+      part(t, geo.box, mats.dark, 1.6, 4.2, -0.6, 0.5, 1.4, 0.5);           // chimney
+      part(t, geo.box, mats.dark, -1.5, 1, 2.11, 1, 2, 0.08);               // door
+      part(t, geo.box, mats.glass, 0.2, 1.7, 2.11, 1, 1, 0.08);             // windows
+      part(t, geo.box, mats.glass, 1.7, 1.7, 2.11, 1, 1, 0.08);
+      part(t, geo.box, mats.glass, 2.71, 1.7, 0, 0.08, 1, 1.2);
+      part(t, geo.box, mats.glass, -2.71, 1.7, 0, 0.08, 1, 1.2);
+    } },
+    barn: { label: 'BARN', w: 5.0, h: 7.2, n: 2, far: true, fixed: true, build(t) {
+      part(t, geo.box, mats.barn, 0, 2, 0, 7.5, 4, 5.5);
+      roof(t, mats.barnRoof, 0, 4, 7.5, 5.5, 3.2);
+      part(t, geo.box, mats.trim, 0, 1.6, 2.76, 2.8, 3.2, 0.08);            // door frame
+      part(t, geo.box, mats.dark, 0, 1.5, 2.79, 2.3, 2.9, 0.08);            // door
+      part(t, geo.box, mats.trim, -2.6, 2.4, 2.76, 0.9, 0.9, 0.08);
+      part(t, geo.box, mats.trim, 2.6, 2.4, 2.76, 0.9, 0.9, 0.08);
+    } },
+    silo: { label: 'SILO', w: 1.8, h: 8.4, n: 2, far: true, fixed: true, build(t) {
+      part(t, geo.siloBody, mats.silo, 0, 3.5, 0);
+      part(t, geo.siloDome, mats.silo, 0, 7, 0);
     } },
   };
 
-  const DEPTH = 190, FIELD = 28, CRUISE_ALT = 2.9, MARGIN = 1.8; // margin = airframe half-span + safety
+  const DEPTH = 190, FIELD = 30, CRUISE_ALT = 2.9, MARGIN = 1.8; // margin = airframe half-span + safety
   const objects = [];
-  // is an object of half-width w at (x, z) clear of the route, across its whole depth?
-  const clear = (x, z, w) => {
-    for (let dz = -5; dz <= 5; dz += 2.5) if (Math.abs(x - pathX(dist - z + dz)) < w + MARGIN) return false;
-    return true;
-  };
-  function place(t, z) {
-    const c = t.userData.cls;
-    const fixed = c === CLASSES.mast || c === CLASSES.building;
-    const s = fixed ? 1 : rand(0.8, 1.35);
-    const w = c.w * s, h = c.h * s;
-    const avoid = h > CRUISE_ALT - 1.2; // low objects are overflown
-    let x = rand(-FIELD, FIELD);
-    if (avoid) {
-      // nearly half of the obstacles stand right beside the route, so it visibly bends around them
-      const px = pathX(dist - z), side = Math.random() < 0.5 ? -1 : 1;
-      if (Math.random() < 0.45) x = px + side * (w + MARGIN + rand(0.4, 3.5));
-      for (let i = 0; i < 24 && !clear(x, z, w); i++) x = rand(-FIELD, FIELD);
-      if (!clear(x, z, w)) x = px + side * (w + MARGIN + 7);
-    }
-    t.scale.setScalar(s);
-    t.rotation.y = fixed ? rand(-0.3, 0.3) : rand(0, Math.PI * 2);
-    t.position.set(x, 0, z);
-    Object.assign(t.userData, { w, h, avoid, conf: rand(0.84, 0.95) });
-  }
-  const spawn = (type, n) => {
-    for (let i = 0; i < n; i++) {
+  const free = {};
+  Object.keys(CLASSES).forEach((type) => {
+    free[type] = [];
+    for (let i = 0; i < CLASSES[type].n; i++) {
       const t = new THREE.Group();
-      t.userData.cls = CLASSES[type];
+      t.userData = { type, cls: CLASSES[type] };
       CLASSES[type].build(t);
-      place(t, -rand(40, DEPTH));
+      t.visible = false;
+      free[type].push(t);
       objects.push(t);
       scene.add(t);
     }
+  });
+  const take = (type) => free[type].pop();
+  const release = (o) => { o.visible = false; free[o.userData.type].push(o); };
+
+  // crop fields beside the route: striped planes in a few crop colours
+  const rowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 8;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 8);
+    g.fillStyle = 'rgba(0,0,0,.28)';
+    for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 8);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(14, 1);
+    return t;
+  })();
+  const CROPS = [0xc9a94a, 0x5f8f3a, 0x6b4a32, 0xd8c23a, 0x7fa04a];
+  const fieldGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const fields = [], freeFields = [];
+  for (let i = 0; i < 7; i++) {
+    const f = new THREE.Mesh(fieldGeo, std(0xffffff, { map: rowTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    f.receiveShadow = true;
+    f.visible = false;
+    f.position.y = 0.03;
+    fields.push(f); freeFields.push(f);
+    scene.add(f);
+  }
+
+  /* ----- route.
+     s = distance along the flight. The route is a chain of waypoints {s, x} joined by
+     quintic ease curves, so lateral velocity and acceleration are zero at every joint
+     and the motion is smooth by construction. Each manoeuvre is generated around a
+     "blocker" obstacle standing on the line the drone was flying, so the turn has a
+     visible reason. Everything else is placed clear of the route and of each other. ----- */
+  let dist = 0, manoeuvreNext = true;
+  const wp = [{ s: -10, x: 0 }, { s: 40, x: 0 }];
+  // order 0 = position, 1 = slope dx/ds, 2 = curvature d2x/ds2
+  function route(s, order) {
+    let i = wp.length - 2;
+    while (i > 0 && wp[i].s > s) i--;
+    const a = wp[i], b = wp[i + 1], L = b.s - a.s, d = b.x - a.x;
+    const t = clamp((s - a.s) / L, 0, 1);
+    if (order === 1) return d * 30 * t * t * (1 - t) * (1 - t) / L;
+    if (order === 2) return d * 60 * t * (1 - t) * (1 - 2 * t) / (L * L);
+    return a.x + d * t * t * t * (10 - 15 * t + 6 * t * t);
+  }
+  const pathX = (s) => route(s, 0);
+
+  // is a footprint of radius w at (x, s) clear of the route, across its whole depth?
+  const clear = (x, s, w) => {
+    for (let ds = -6; ds <= 6; ds += 3) if (Math.abs(x - pathX(s + ds)) < w + MARGIN) return false;
+    return true;
   };
-  spawn('pine', 28); spawn('tree', 11); spawn('rock', 14); spawn('mast', 3); spawn('building', 4);
+  // does it touch anything already standing? (no house inside a tree, no rock inside a barn)
+  const overlaps = (x, s, w) => objects.some((o) => o.visible &&
+    Math.hypot(x - o.position.x, s - o.userData.s) < w + o.userData.w + 0.8);
+
+  function put(o, x, s, scale, block) {
+    const c = o.userData.cls;
+    o.scale.setScalar(scale);
+    o.rotation.y = c.far ? rand(-0.5, 0.5) + (Math.random() < 0.5 ? 0 : Math.PI / 2) : rand(0, Math.PI * 2);
+    o.position.set(x, 0, dist - s);
+    Object.assign(o.userData, { s, w: c.w * scale, h: c.h * scale, block: !!block, conf: rand(0.84, 0.95) });
+    o.visible = true;
+  }
+
+  function scatter(type, s0, s1) {
+    const o = take(type);
+    if (!o) return;
+    const c = o.userData.cls, scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale;
+    for (let i = 0; i < 16; i++) {
+      const s = rand(s0, s1), px = pathX(s), side = Math.random() < 0.5 ? -1 : 1;
+      const x = c.far ? px + side * rand(w + MARGIN + 7, FIELD)          // farmyards sit back from the route
+        : c.low || Math.random() < 0.5 ? rand(-FIELD, FIELD)
+        : px + side * (w + MARGIN + rand(0.3, 5));                       // trees flanking the route
+      if (!c.low && !clear(x, s, w)) continue;
+      if (overlaps(x, s, w)) continue;
+      put(o, x, s, scale);
+      return;
+    }
+    release(o);
+  }
+
+  function populate(s0, s1) {
+    const len = s1 - s0;
+    const count = (per) => Math.floor(len / per + Math.random());
+    for (let i = count(6); i > 0; i--) scatter('pine', s0, s1);
+    for (let i = count(18); i > 0; i--) scatter('tree', s0, s1);
+    for (let i = count(16); i > 0; i--) scatter('rock', s0, s1);
+    for (let i = count(20); i > 0; i--) scatter('hay', s0, s1);
+    if (Math.random() < 0.45) {                                           // a farmyard: house, maybe barn and silo
+      scatter('house', s0, s1);
+      if (Math.random() < 0.6) scatter('barn', s0, s1);
+      if (Math.random() < 0.5) scatter('silo', s0, s1);
+    }
+    if (Math.random() < 0.15) scatter('mast', s0, s1);
+    if (freeFields.length && Math.random() < 0.7) {
+      const f = freeFields.pop(), side = Math.random() < 0.5 ? -1 : 1;
+      f.scale.set(rand(18, 38), 1, len * rand(0.8, 1.3));
+      f.userData.s = (s0 + s1) / 2;
+      f.position.x = side * rand(24, 46);
+      f.material.color.set(pick(CROPS));
+      f.visible = true;
+    }
+  }
+
+  function extend() {
+    while (wp[wp.length - 1].s < dist + DEPTH) {
+      const a = wp[wp.length - 1];
+      const blocker = manoeuvreNext && (take(pick(['pine', 'pine', 'pine', 'tree', 'tree', 'mast'])) || take('pine'));
+      if (blocker) {
+        const c = blocker.userData.cls, scale = c.fixed ? 1 : rand(0.9, 1.35), w = c.w * scale;
+        // sidestep far enough to clear the blocker, over a distance long enough to stay gentle
+        const delta = (w + MARGIN) / 0.8 + rand(0.5, 2);
+        let dir = Math.random() < 0.5 ? -1 : 1;
+        if (Math.abs(a.x + dir * delta) > 12) dir = -dir;
+        const L = clamp(delta * 9, 45, 75);
+        wp.push({ s: a.s + L, x: a.x + dir * delta });
+        put(blocker, a.x, a.s + L * rand(0.85, 1), scale, true);
+        populate(a.s, a.s + L);
+      } else {
+        const L = rand(18, 38);
+        wp.push({ s: a.s + L, x: a.x });
+        populate(a.s, a.s + L);
+      }
+      manoeuvreNext = !manoeuvreNext;
+    }
+    while (wp.length > 2 && wp[1].s < dist - 10) wp.shift();
+  }
 
   /* ----- drifting particles: fireflies at night, pollen by day ----- */
   const DUST = 260;
@@ -289,6 +408,8 @@
 
   /* ----- theme: night flies on StarNav, day on SolarNav ----- */
   let colors = {}, day = false;
+  let speed = 17, time = 0, last = 0, raf = 0, visible = false;
+  let vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
   function applyTheme() {
     day = root.dataset.theme === 'light';
     const horizon = day ? 0xcfdfea : 0x16203a;
@@ -314,38 +435,38 @@
     dustMat.opacity = day ? 0.35 : 0.8;
     modeEl.textContent = day ? 'SOLARNAV' : 'STARNAV';
     const s = getComputedStyle(root);
-    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#0a0b0d' : '#f2f1ec' };
+    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#161a12' : '#e9e6d6' };
     if (!raf) render();
   }
   document.addEventListener('themechange', applyTheme);
 
-  /* ----- autopilot ----- */
-  let speed = 17, time = 0, last = 0, raf = 0, visible = false;
-  let vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
-  camera.position.set(pathX(0), CRUISE_ALT, 0);
-
+  /* ----- flight ----- */
   function update(dt) {
     time += dt;
     speed = 17 + Math.sin(time * 0.12) * 1.5;
     dist += speed * dt;
+    extend();
 
-    // The drone follows the route exactly. Obstacles are only ever placed clear of it
-    // (see place()), so it cannot fly through a crown or a wall.
+    // The drone follows the route exactly; nothing that must be avoided is ever placed on it.
     camera.position.x = pathX(dist);
-    vx = pathD1(dist) * speed;
-    ax = pathD2(dist) * speed * speed;
+    vx = route(dist, 1) * speed;
+    ax = route(dist, 2) * speed * speed;
     camera.position.y = CRUISE_ALT + Math.sin(time * 0.4) * 0.12;
     // bank angle follows lateral acceleration (coordinated turn); nose follows the velocity vector
-    roll += (-Math.atan(ax / 9.81) * 1.5 - roll) * Math.min(1, dt * 2);
+    roll += (-Math.atan(ax / 9.81) - roll) * Math.min(1, dt * 2.5);
     camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30);
     camera.rotateZ(roll);
-    camera.fov = 62;
-    camera.updateProjectionMatrix();
 
     groundTex.offset.y += speed * dt / TILE;
     for (const o of objects) {
-      o.position.z += speed * dt;
-      if (o.position.z > 8) place(o, o.position.z - DEPTH);
+      if (!o.visible) continue;
+      o.position.z = dist - o.userData.s;
+      if (o.position.z > 8) release(o);
+    }
+    for (const f of fields) {
+      if (!f.visible) continue;
+      f.position.z = dist - f.userData.s;
+      if (f.position.z - f.scale.z / 2 > 8) { f.visible = false; freeFields.push(f); }
     }
     for (let i = 0; i < DUST; i++) {
       dustPos[i * 3 + 2] += speed * dt;
@@ -388,10 +509,11 @@
 
     // planned route on the ground
     h2.globalAlpha = 0.9;
+    h2.lineWidth = 1.5;
     h2.setLineDash([6, 6]);
     h2.beginPath();
     let pen = false;
-    for (let d = 4; d <= 70; d += 3) {
+    for (let d = 4; d <= 90; d += 3) {
       const s = toScreen(pathX(dist + d), 0.05, -d);
       if (!s) continue;
       if (pen) h2.lineTo(s[0], s[1]); else { h2.moveTo(s[0], s[1]); pen = true; }
@@ -402,16 +524,18 @@
     // detections
     tracked = 0;
     for (const o of objects) {
-      const d = -o.position.z;
+      if (!o.visible) continue;
+      const u = o.userData, d = -o.position.z;
       if (d < 4 || d > 95) continue;
-      const a = toScreen(o.position.x - o.userData.w, 0, o.position.z);
-      const b = toScreen(o.position.x + o.userData.w, o.userData.h, o.position.z);
+      const a = toScreen(o.position.x - u.w, 0, o.position.z);
+      const b = toScreen(o.position.x + u.w, u.h, o.position.z);
       if (!a || !b) continue;
       const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]);
       const y0 = Math.max(Math.min(a[1], b[1]), -20), y1 = Math.max(a[1], b[1]);
       if (x1 < 0 || x0 > W) continue;
       tracked++;
-      const threat = o.userData.avoid && Math.abs(o.position.x - pathX(dist + d)) < o.userData.w + MARGIN + 2.5;
+      // a threat is anything the route had to bend around, or that stands right beside it
+      const threat = !u.cls.low && (u.block || Math.abs(o.position.x - pathX(u.s)) < u.w + MARGIN + 2.5);
       const col = threat ? colors.accent : colors.ink;
       h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat ? 1 : 0.6);
       h2.strokeStyle = h2.fillStyle = col;
@@ -424,9 +548,9 @@
       });
       h2.stroke();
       if (x1 - x0 > 26) {
-        const conf = Math.min(0.99, o.userData.conf + (1 - d / 95) * 0.08);
-        const action = !o.userData.avoid ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
-        h2.fillText(`${o.userData.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, x0, Math.max(12, y0 - 16));
+        const conf = Math.min(0.99, u.conf + (1 - d / 95) * 0.08);
+        const action = u.cls.low ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
+        h2.fillText(`${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, x0, Math.max(12, y0 - 16));
         h2.fillText(action, x0, Math.max(24, y0 - 5));
       }
     }
@@ -473,5 +597,8 @@
     if (!raf) render();
   }).observe(box);
 
+  camera.position.set(0, CRUISE_ALT, 0);
+  camera.lookAt(0, CRUISE_ALT - 0.3, -30);
+  extend();
   applyTheme();
 })();
