@@ -315,7 +315,7 @@
     hay: { label: 'HAY BALE', w: 0.9, h: 1.4, n: 14, low: true, fixed: true, build(t) {
       part(t, geo.bale, mats.hay, 0, 0.7, 0);
     } },
-    mast: { label: 'PYLON', w: 2.2, h: 18.4, n: 3, fixed: true, build(t) {
+    mast: { label: 'PYLON', w: 3.0, h: 18.4, n: 3, fixed: true, build(t) {
       part(t, geo.lattice, mats.lattice, 0, 9, 0);
       [13.5, 16].forEach((y) => {
         part(t, geo.arm, mats.steel, 0, y, 0);
@@ -345,6 +345,11 @@
     silo: { label: 'SILO', w: 1.8, h: 8.4, n: 2, far: true, fixed: true, build(t) {
       part(t, geo.siloBody, mats.silo, 0, 3.5, 0);
       part(t, geo.siloDome, mats.silo, 0, 7, 0);
+    } },
+    windmill: { label: 'WINDMILL', w: 5, h: 12, n: 2, far: true, fixed: true, build(t) {
+      part(t, geo.siloBody, mats.trim, 0, 4.5, 0, 1.2, 1.3, 1.2);
+      part(t, geo.box, mats.timber, 0, 9, 1.8, 9, 0.3, 0.1).rotation.z = 0.6;
+      part(t, geo.box, mats.timber, 0, 9, 1.8, 0.3, 9, 0.1).rotation.z = 0.6;
     } },
 
     /* --- sea: open water, drifting debris, a port now and then --- */
@@ -401,6 +406,14 @@
       part(t, geo.box, mats.trim, 0, 6.5, 10, 5.4, 5, 6);
       [-8, -2, 4].forEach((z, i) => part(t, geo.box, mats.boxes[i], 0, 5.3, z, 5.6, 2.6, 5.4));
     } },
+    lighthouse: { label: 'LIGHTHOUSE', w: 4, h: 16, n: 2, far: true, fixed: true, sink: 0.03, build(t) {
+      part(t, geo.siloBody, mats.trim, 0, 7, 0, 1, 2, 1);
+      part(t, geo.beacon, mats.beacon, 0, 14.6, 0, 3, 3, 3);
+    } },
+    dock: { label: 'PIER', w: 7, h: 2.6, n: 4, far: true, fixed: true, sink: 0.2, build(t) {
+      part(t, geo.box, mats.timber, 0, 0.9, 0, 3, 0.3, 13);
+      [-5, 0, 5].forEach((z) => part(t, geo.box, mats.timber, 1.2, 0.2, z, 0.3, 2, 0.3));
+    } },
 
     /* --- ground: fortified field --- */
     trench: { label: 'TRENCH', w: 5.2, h: 1.2, n: 5, fixed: true, across: true, build(t) {
@@ -424,7 +437,7 @@
       part(t, geo.craterRim, mats.earth, 0, 0.05, 0, 1, 0.6, 1);
       part(t, geo.craterPit, mats.burnt, 0, 0.04, 0);
     } },
-    wreck: { label: 'WRECK', w: 3.3, h: 2.4, n: 4, fixed: true, build(t) {
+    wreck: { label: 'VEHICLE', w: 3.3, h: 2.4, n: 4, fixed: true, build(t) {
       const g = new THREE.Group();
       part(g, geo.box, mats.burnt, 0, 0.95, 0, 2.4, 1.1, 5);
       part(g, geo.box, mats.rust, 0, 1.9, 0.8, 2.2, 0.9, 1.8);
@@ -460,6 +473,9 @@
     supply: { label: 'SUPPLY CRATE', w: 1.1, h: 1.1, n: 10, fixed: true, build(t) {
       part(t, geo.box, mats.wood, 0, 0.5, 0, 1.2, 1, 1.2);
     } },
+    sandbags: { label: 'SANDBAGS', w: 2.6, h: 1.2, n: 8, fixed: true, across: true, build(t) {
+      for (let i = 0; i < 10; i++) part(t, geo.bag, mats.sandbag, -2 + (i % 5) * 1.0 + (i > 4 ? 0.5 : 0), i > 4 ? 0.48 : 0.16, 0);
+    } },
   };
 
   /* ----- environments: what each platform meets, and how it moves ----- */
@@ -476,6 +492,7 @@
           if (Math.random() < 0.5) scatter('silo', s0, s1);
         }
         if (Math.random() < 0.15) scatter('mast', s0, s1);
+        if (Math.random() < 0.2) scatter('windmill', s0, s1);
         if (freeFields.length && Math.random() < 0.7) {
           const f = freeFields.pop(), side = Math.random() < 0.5 ? -1 : 1;
           f.scale.set(rand(18, 38), 1, (s1 - s0) * rand(0.8, 1.3));
@@ -495,7 +512,10 @@
           amp: 1,
           blockers: ['debris', 'log', 'container', 'barrel', 'boat', 'debris'],
           scatter: [['debris', 20], ['log', 30], ['barrel', 26], ['buoy', 60], ['boat', 80]],
-          extras(s0, s1) { if (Math.random() < 0.15) scatter('cargoship', s0, s1); },
+          extras(s0, s1) {
+            if (Math.random() < 0.15) scatter('cargoship', s0, s1);
+            if (Math.random() < 0.12) scatter('lighthouse', s0, s1);
+          },
         },
         port: {
           amp: 0.35,
@@ -504,6 +524,8 @@
           extras(s0, s1) {
             if (Math.random() < 0.6) scatter('port', s0, s1);
             if (Math.random() < 0.7) scatter('cargoship', s0, s1);
+            if (Math.random() < 0.5) scatter('dock', s0, s1);
+            if (Math.random() < 0.25) scatter('lighthouse', s0, s1);
           },
         },
       },
@@ -511,8 +533,8 @@
     ground: {
       alt: 1.3, speed: 7, margin: 1.2, limit: 10, field: 26, straight: [10, 22],
       len: (delta) => clamp(delta * 6, 22, 46),
-      blockers: ['trench', 'hedgehog', 'crater', 'wire', 'wreck', 'block', 'barricade'],
-      scatter: [['hedgehog', 13], ['crater', 14], ['deadtree', 9], ['block', 24], ['barricade', 26], ['supply', 20]],
+      blockers: ['trench', 'hedgehog', 'crater', 'wire', 'wreck', 'block', 'barricade', 'sandbags'],
+      scatter: [['hedgehog', 13], ['crater', 14], ['deadtree', 9], ['block', 24], ['barricade', 26], ['supply', 20], ['sandbags', 24]],
       extras(s0, s1) {
         if (Math.random() < 0.3) scatter('dugout', s0, s1);
         if (Math.random() < 0.4) scatter('shelter', s0, s1);
@@ -566,6 +588,17 @@
     barricade: { env: 'ground', fit: 'w', files: ['survival/fence-fortified'] },
     shelter: { env: 'ground', fit: 'w', files: ['survival/tent', 'survival/tent-canvas', 'survival/structure-canvas', 'survival/structure-metal'] },
     supply: { env: 'ground', fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
+    // single models from poly.pizza (see models/poly/LICENSE.txt)
+    barn: { env: 'air', fit: 'w', files: ['poly/barn', 'poly/big-barn'] },
+    silo: { env: 'air', fit: 'h', files: ['poly/silo'] },
+    hay: { env: 'air', fit: 'w', files: ['poly/hay'] },
+    windmill: { env: 'air', fit: 'h', files: ['poly/windmill'] },
+    mast: { env: 'air', fit: 'h', files: ['poly/pylon'] },
+    lighthouse: { env: 'sea', fit: 'h', files: ['poly/lighthouse'] },
+    dock: { env: 'sea', fit: 'w', files: ['poly/dock'] },
+    wreck: { env: 'ground', fit: 'w', files: ['poly/broken-car', 'poly/tank', 'poly/pickup-armored'] },
+    sandbags: { env: 'ground', fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
+    block: { env: 'ground', fit: 'w', files: ['poly/barrier'] },
   };
   const loadModels = (() => {
     if (!THREE.GLTFLoader) return () => {};
