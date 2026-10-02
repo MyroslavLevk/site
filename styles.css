@@ -167,7 +167,7 @@ ul { list-style: none; }
   transition: transform .9s var(--ease);
 }
 
-/* the "V" is a drone: it grows and drifts to the middle of the screen, as if flying straight at us */
+/* the "V" is a drone: it takes off - climbs up and away, getting a little smaller */
 .letter--drone {
   position: relative;
   z-index: 1;
@@ -175,10 +175,10 @@ ul { list-style: none; }
   opacity: 1;
   transform-origin: 50% 60%;
   transform:
-    translate(calc(var(--p) * -1.1em), calc(var(--p) * -22vh))
-    rotate(calc(var(--p) * -7deg))
-    scale(calc(1 + var(--p) * 3.2));
-  transition: transform .5s var(--ease);
+    translate(calc(var(--p) * -.25em), calc(var(--p) * -58vh))
+    rotate(calc(var(--p) * -6deg))
+    scale(calc(1 - var(--p) * .3));
+  transition: transform .7s var(--ease);
   filter: drop-shadow(0 calc(.02em + var(--p) * .12em) calc(.03em + var(--p) * .1em) rgba(0, 0, 0, .35));
 }
 .glyph {
