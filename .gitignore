@@ -16,3 +16,6 @@ dist/
 .env
 .env.*
 
+
+# Raw source models (converted copies live in v3/models)
+еку/
