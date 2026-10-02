@@ -1,0 +1,17 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tooling
+node_modules/
+dist/
+.claude/
+*.log
+.env
+.env.*

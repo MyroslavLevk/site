@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FNAV Systems — Navigate Without GPS</title>
+  <meta name="description" content="Passive GPS-denied navigation for drones, vessels and ground vehicles. Zero RF. No infrastructure. Unjammable.">
+  <script>
+    // set theme before paint to avoid a flash
+    try {
+      var t = localStorage.getItem('fnav-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <a class="nav__logo" href="index.html" aria-label="FNAV Systems">FNAV<span>/systems</span></a>
+  <nav class="nav__links" aria-label="Main">
+    <a href="index.html" aria-current="page">Main</a>
+    <a href="product.html">Product</a>
+    <a href="tests.html">Tests</a>
+    <a href="contact.html">Contact</a>
+  </nav>
+  <button class="theme" id="theme" type="button" aria-label="Toggle light / dark theme">
+    <span class="theme__knob"></span>
+  </button>
+</header>
+
+<main id="top">
+
+  <!-- HERO: tall section, sticky stage; wordmark is driven by scroll -->
+  <section class="hero" id="hero">
+    <div class="hero__stage">
+      <div class="hero__grid" aria-hidden="true"></div>
+
+      <p class="hero__label mono">Passive GPS-denied navigation <i>●</i> BRAVE1 validated</p>
+
+      <div class="hero__copy">
+        <p class="hero__claim">Navigate without GPS.</p>
+        <ul class="hero__points mono">
+          <li>Zero RF</li><li>100 g module</li><li>Day + night</li>
+        </ul>
+        <div class="hero__actions">
+          <a class="btn btn--sm" href="product.html"><span>See the product</span><i>→</i></a>
+          <a class="btn btn--sm btn--ghost" href="contact.html"><span>Get in touch</span></a>
+        </div>
+      </div>
+
+      <!-- full-width wordmark on the bottom edge; the "A" is a fixed-wing drone seen from above -->
+      <h1 class="wordmark" id="wordmark" aria-label="FNAV">
+        <span class="wordmark__in" aria-hidden="true">
+          <span class="letter" style="--i:0">F</span>
+          <span class="letter" style="--i:1">N</span>
+          <span class="letter letter--drone">
+            <svg class="glyph" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <!-- swept wings = the legs of the A -->
+              <path class="glyph__body" d="M45 12L2 91l-2 9h21l26-56zM55 12l43 79 2 9H79L53 44z"/>
+              <!-- tailplane = the crossbar -->
+              <rect class="glyph__body" x="25" y="60" width="50" height="13" rx="3"/>
+              <!-- fuselage with a rounded nose -->
+              <path class="glyph__body" d="M50 0c6 0 9 8 9 17v52H41V17c0-9 3-17 9-17z"/>
+              <path class="glyph__line" d="M41 20v40M59 20v40M12 86l12-26M88 86L76 60M31 66.500h38"/>
+              <!-- sensor dome -->
+              <circle class="glyph__cut" cx="50" cy="13" r="5"/>
+              <circle class="glyph__accent" cx="50" cy="13" r="2.200"/>
+              <!-- wingtip lights -->
+              <path class="glyph__accent glyph__led" d="M0 100l2-9h8l-3 9zM100 100l-2-9h-8l3 9z"/>
+              <!-- pusher motor and spinning propeller -->
+              <rect class="glyph__body" x="46" y="69" width="8" height="11" rx="2"/>
+              <ellipse class="glyph__prop" cx="50" cy="83" rx="15" ry="2.600"/>
+            </svg>
+          </span>
+          <span class="letter" style="--i:3">V</span>
+        </span>
+      </h1>
+    </div>
+  </section>
+
+  <div class="ticker mono" aria-hidden="true">
+    <div class="ticker__track">
+      <span>Zero RF</span><span>No infrastructure</span><span>Unjammable</span><span>Not just heading — full navigation</span>
+      <span>Zero RF</span><span>No infrastructure</span><span>Unjammable</span><span>Not just heading — full navigation</span>
+    </div>
+  </div>
+
+  <section class="section about">
+    <span class="mono reveal">FNAV Systems</span>
+    <p class="lead reveal">A Ukrainian defense technology startup. We build passive navigation for UAV, USV and UGV platforms — <em>GPS replacement, not GPS supplement</em> — so every Ukrainian platform navigates reliably under full GPS jamming.</p>
+    <p class="about__note mono reveal">Built by Ukrainians, for Ukraine's victory</p>
+  </section>
+
+  <section class="section stats">
+    <div class="stat reveal"><b>100<small>g</small></b><span class="mono">Plug-in payload</span></div>
+    <div class="stat reveal"><b>0</b><span class="mono">RF emissions — undetectable</span></div>
+    <div class="stat reveal"><b>2</b><span class="mono">Sky references — stars and sun</span></div>
+  </section>
+
+  <section class="section" id="product">
+    <header class="section__head reveal">
+      <span class="mono">01 — Product</span>
+      <h2>Two skies.<br>One position fix.</h2>
+    </header>
+    <div class="cards">
+      <article class="card reveal" data-spot>
+        <span class="mono card__tag">Night</span>
+        <svg class="card__art" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="44"/><circle cx="60" cy="60" r="24" class="dash"/>
+          <circle cx="38" cy="42" r="2.5" class="fill"/><circle cx="82" cy="52" r="2" class="fill"/>
+          <circle cx="66" cy="86" r="3" class="fill"/><path d="M38 42L82 52L66 86Z" class="thin"/>
+        </svg>
+        <h3>StarNav</h3>
+        <p>Uses the night sky to compute absolute heading — passive, zero-RF, with no error accumulation.</p>
+      </article>
+      <article class="card reveal" data-spot>
+        <span class="mono card__tag">Day</span>
+        <svg class="card__art" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="18"/><circle cx="60" cy="60" r="44" class="dash"/>
+          <path class="thin" d="M60 6v14M60 100v14M6 60h14M100 60h14M22 22l10 10M88 88l10 10M98 22L88 32M32 88L22 98"/>
+        </svg>
+        <h3>SolarNav</h3>
+        <p>Uses the sun to compute absolute heading, with continuous correction throughout daylight hours.</p>
+      </article>
+    </div>
+    <a class="link reveal" href="product.html">Navigation Module v1 — full specification <i>→</i></a>
+  </section>
+
+  <section class="section" id="how">
+    <header class="section__head reveal">
+      <span class="mono">02 — How it works</span>
+      <h2>Look up.<br>Know where you are.</h2>
+    </header>
+    <ol class="steps">
+      <li class="reveal"><span class="mono">Observe</span><h3>The sky is the reference</h3><p>Stars at night, the sun by day. Nothing is transmitted, so there is nothing to detect and nothing to jam.</p></li>
+      <li class="reveal"><span class="mono">Resolve</span><h3>Absolute, not relative</h3><p>Each fix is computed from the sky itself, so error does not accumulate. VIO and map-matching run alongside for precise short-term positioning.</p></li>
+      <li class="reveal"><span class="mono">Output</span><h3>Straight to the autopilot</h3><p>MAVLink into ArduPilot or PX4. The module plugs in as a payload — no ground infrastructure required.</p></li>
+    </ol>
+
+    <div class="compare reveal" role="table" aria-label="Navigation methods compared">
+      <div class="compare__row compare__row--head mono" role="row">
+        <span role="columnheader"></span><span role="columnheader">GNSS</span><span role="columnheader">Inertial</span><span role="columnheader">FNAV</span>
+      </div>
+      <div class="compare__row" role="row">
+        <span role="rowheader">Depends on an external signal</span><span role="cell">Yes</span><span role="cell">No</span><span role="cell" class="win">No</span>
+      </div>
+      <div class="compare__row" role="row">
+        <span role="rowheader">Can be jammed</span><span role="cell">Yes</span><span role="cell">No</span><span role="cell" class="win">No</span>
+      </div>
+      <div class="compare__row" role="row">
+        <span role="rowheader">Error grows over time</span><span role="cell">No</span><span role="cell">Yes</span><span role="cell" class="win">No</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="platforms">
+    <header class="section__head reveal">
+      <span class="mono">03 — Platforms</span>
+      <h2>Air. Sea. Ground.</h2>
+    </header>
+    <ul class="rows">
+      <li class="row reveal"><span class="mono">UAV</span><h3>Fixed-wing, multi-rotor, loitering munitions</h3><p>StarNav + SolarNav output via MAVLink into ArduPilot or PX4.</p><i>↗</i></li>
+      <li class="row reveal"><span class="mono">USV</span><h3>Open-ocean vessels</h3><p>Where map-matching fails entirely. Validated on real vessel telemetry from two companies (NDA).</p><i>↗</i></li>
+      <li class="row reveal"><span class="mono">UGV</span><h3>Ground vehicles and autonomous rovers</h3><p>GPS-jammed environments — urban terrain or open field.</p><i>↗</i></li>
+    </ul>
+  </section>
+
+  <section class="section" id="flight">
+    <header class="section__head reveal">
+      <span class="mono">04 — Onboard view</span>
+      <h2>No GPS. No pilot.<br>Still on course.</h2>
+    </header>
+    <div class="game reveal" id="game">
+      <canvas id="gameCanvas" aria-label="Simulation: onboard camera of an autonomous drone that detects obstacles and flies around them"></canvas>
+      <canvas id="hudCanvas" aria-hidden="true"></canvas>
+      <div class="game__hud mono">
+        <span>GPS <b class="bad">NO SIGNAL</b></span>
+        <span>NAV <b id="navMode">STARNAV</b></span>
+        <span>MODE <b>AUTONOMOUS</b></span>
+      </div>
+      <div class="game__hud game__hud--r mono">
+        <span>SPD <b id="spd">0</b> km/h</span>
+        <span>ALT <b id="alt">0</b> m</span>
+        <span>OBJ <b id="obj">0</b></span>
+        <span>DIST <b id="dist">0</b> m</span>
+      </div>
+      <p class="game__hint mono" id="hint">Simulation — the onboard AI classifies obstacles and routes around them</p>
+    </div>
+    <p class="game__note mono reveal">Switch the theme — night flies on StarNav, day on SolarNav</p>
+  </section>
+
+  <section class="section cta" id="contact">
+    <span class="mono reveal">05 — Contact</span>
+    <h2 class="reveal">Collaboration.<br>Testing. Deployment.</h2>
+    <p class="lead lead--sm reveal">Accuracy figures and pricing on request. We respond fast.</p>
+    <a class="btn reveal" href="contact.html" data-magnet><span>Get in touch</span><i>→</i></a>
+  </section>
+</main>
+
+<footer class="footer mono">
+  <span>FNAV — Full GPS-Denied Navigation. Passive. Unjammable. Zero RF.</span>
+  <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+  <a href="#top">Back to top ↑</a>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>
