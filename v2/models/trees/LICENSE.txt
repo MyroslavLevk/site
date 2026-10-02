@@ -1,0 +1,4 @@
+Tree models (pines.glb, broadleaf.glb, dead.glb) by Quaternius, via poly.pizza.
+License: CC0 1.0 (public domain) - https://creativecommons.org/publicdomain/zero/1.0/
+Sources: https://poly.pizza/m/w8ZaiYjK8C  https://poly.pizza/m/etFGNvsiFv  https://poly.pizza/m/F5I0Q7TwO5
+Textures were downscaled for web use; geometry is unchanged.

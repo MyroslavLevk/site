@@ -133,15 +133,66 @@
   ground.receiveShadow = true;
   scene.add(ground);
 
-  /* ----- sea: a faceted water surface displaced by a travelling swell ----- */
+  /* ----- sea: a swell built from four wave trains, smooth-shaded and reflecting the sky ----- */
+  // direction (across, along), wavelength and amplitude in metres; speed follows deep-water dispersion
+  const WAVES = [[0.2, 1, 62, 0.46], [-0.45, 0.9, 35, 0.27], [0.7, 0.7, 19, 0.13], [-0.8, 0.55, 11, 0.06]].map(([dx, ds, L, a], i) => {
+    const n = Math.hypot(dx, ds), k = Math.PI * 2 / L;
+    return { kx: dx / n * k, ks: ds / n * k, w: Math.sqrt(9.81 * k), a, ph: i * 1.7 };
+  });
+  let seaAmp = 1; // sea state: 1 in open water, lower inside a sheltered harbour
   // wave height at world position (x across, s along the route) and time t
-  const wave = (x, s, t) =>
-    0.38 * Math.sin(0.16 * s + 1.0 * t) +
-    0.22 * Math.sin(0.1 * x + 0.21 * s + 0.7 * t + 1) +
-    0.1 * Math.sin(0.33 * x - 0.8 * t);
-  const WSIZE = 280, WSEG = 60;
+  const wave = (x, s, t) => {
+    let h = 0;
+    for (const q of WAVES) h += q.a * Math.sin(q.kx * x + q.ks * s + q.w * t + q.ph);
+    return h * seaAmp;
+  };
+  const WSIZE = 300, WSEG = 100;
   const waterGeo = new THREE.PlaneGeometry(WSIZE, WSIZE, WSEG, WSEG).rotateX(-Math.PI / 2);
-  const waterMat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.25, flatShading: true });
+  waterGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(waterGeo.attributes.position.count * 3).fill(1), 3));
+  // ripples too fine for the mesh: a tileable normal map that drifts over the surface
+  const rippleTex = (() => {
+    const N = 128, c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d'), img = ctx.createImageData(N, N);
+    const F = [[3, 1, 0], [-2, 4, 1.3], [5, -3, 2.1], [1, 6, 0.7], [7, 2, 4.2]]; // whole periods -> seamless
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let nx = 0, ny = 0;
+      for (const [a, b, ph] of F) {
+        const d = Math.cos(Math.PI * 2 * (a * x + b * y) / N + ph) / Math.hypot(a, b);
+        nx -= d * a; ny -= d * b;
+      }
+      const inv = 1 / Math.hypot(nx, ny, 2.2), i = (y * N + x) * 4;
+      img.data[i] = (nx * inv * 0.5 + 0.5) * 255;
+      img.data[i + 1] = (ny * inv * 0.5 + 0.5) * 255;
+      img.data[i + 2] = (2.2 * inv * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(30, 30);
+    return t;
+  })();
+  // what the water mirrors: a small sky gradient (zenith, horizon, below) turned into an environment map
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const skyEnv = (zenith, horizon, below) => {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 32;
+    const ctx = c.getContext('2d'), grd = ctx.createLinearGradient(0, 0, 0, 32);
+    grd.addColorStop(0, zenith); grd.addColorStop(0.48, horizon); grd.addColorStop(0.52, below); grd.addColorStop(1, below);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 64, 32);
+    const t = new THREE.CanvasTexture(c);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.encoding = THREE.sRGBEncoding;
+    const env = pmrem.fromEquirectangular(t).texture;
+    t.dispose();
+    return env;
+  };
+  const SKY_ENV = { day: skyEnv('#3f86d6', '#eef4f6', '#1d4250'), night: skyEnv('#04060d', '#22335c', '#050a10') };
+  const waterMat = new THREE.MeshStandardMaterial({
+    roughness: 0.12, metalness: 0, vertexColors: true,
+    normalMap: rippleTex, normalScale: new THREE.Vector2(0.4, 0.4),
+  });
   const water = new THREE.Mesh(waterGeo, waterMat);
   water.position.z = 20 - WSIZE / 2;
   water.receiveShadow = true;
@@ -297,28 +348,28 @@
     } },
 
     /* --- sea: open water, drifting debris, a port now and then --- */
-    debris: { label: 'DEBRIS', w: 1.5, h: 0.8, n: 14, float: true, build(t) {
+    debris: { label: 'DEBRIS', w: 1.5, h: 0.8, n: 14, float: true, sink: 0.35, build(t) {
       part(t, geo.box, mats.wood, 0, 0.1, 0, 0.9, 0.7, 0.9).rotation.set(0.2, 0.4, 0.15);
       part(t, geo.box, mats.wood, 0.9, 0, 0.5, 1.8, 0.08, 0.3).rotation.y = 0.5;
       part(t, geo.box, mats.boxes[3], -0.7, 0.05, -0.5, 0.5, 0.4, 0.5).rotation.z = 0.3;
     } },
-    log: { label: 'DRIFTWOOD', w: 1.8, h: 0.5, n: 10, float: true, build(t) {
+    log: { label: 'DRIFTWOOD', w: 1.8, h: 0.5, n: 10, float: true, sink: 0.4, build(t) {
       part(t, geo.log, mats.deadwood, 0, 0.05, 0);
       part(t, geo.branch, mats.deadwood, 0.6, 0.3, 0.2, 0.7, 0.5, 0.7).rotation.x = 0.9;
     } },
-    barrel: { label: 'BARREL', w: 0.8, h: 0.6, n: 12, float: true, fixed: true, build(t) {
+    barrel: { label: 'BARREL', w: 0.8, h: 0.6, n: 12, float: true, fixed: true, sink: 0.45, build(t) {
       part(t, geo.barrel, mats.rust, 0, 0.08, 0);
     } },
-    buoy: { label: 'BUOY', w: 1.0, h: 2.6, n: 8, float: true, fixed: true, build(t) {
+    buoy: { label: 'BUOY', w: 1.0, h: 2.6, n: 14, float: true, fixed: true, sink: 0.12, build(t) {
       part(t, geo.buoyBody, mats.buoy, 0, 0.35, 0);
       part(t, geo.pole, mats.steel, 0, 1.6, 0, 1, 1.6, 1);
       part(t, geo.beacon, mats.beacon, 0, 2.5, 0).add(glow(0xff3030, 2.4));
     } },
-    container: { label: 'CONTAINER', w: 3.5, h: 1.8, n: 4, float: true, fixed: true, build(t) {
+    container: { label: 'CONTAINER', w: 3.5, h: 1.8, n: 6, float: true, fixed: true, sink: 0.45, build(t) {
       part(t, geo.box, pick(mats.boxes), 0, 0.2, 0, 6.1, 2.6, 2.44).rotation.set(0.1, 0, 0.14);
     } },
     // quay with a gantry crane, stacked containers and a moored ship; the water side faces -x
-    port: { label: 'PORT', w: 25, h: 18, n: 2, far: true, fixed: true, face: true, build(t) {
+    port: { label: 'PORT', w: 25, h: 18, n: 3, far: true, fixed: true, face: true, build(t) {
       part(t, geo.box, mats.concrete, 9, 0.6, 0, 10, 3, 44);
       for (let z = -20; z <= 20; z += 8) part(t, geo.box, mats.dark, 4.2, 0.2, z, 0.6, 3.4, 0.6); // piles
       [[6, -4], [6, 4], [12, -4], [12, 4]].forEach(([x, z]) => part(t, geo.box, mats.buoy, x, 9, z, 0.5, 14, 0.5));
@@ -340,6 +391,15 @@
         lamp.position.set(6, 8.2, z);
         t.add(lamp);
       });
+    } },
+    boat: { label: 'BOAT', w: 3.3, h: 4.6, n: 10, float: true, fixed: true, sink: 0.1, build(t) {
+      part(t, geo.box, mats.hull, 0, 0.5, 0, 2.2, 1.2, 6);
+      part(t, geo.box, mats.trim, 0, 1.8, -0.6, 1.6, 1.4, 2);
+    } },
+    cargoship: { label: 'CARGO SHIP', w: 16, h: 13, n: 4, far: true, fixed: true, along: true, sink: 0.08, build(t) {
+      part(t, geo.box, mats.hull, 0, 1.5, 0, 7, 5, 30);
+      part(t, geo.box, mats.trim, 0, 6.5, 10, 5.4, 5, 6);
+      [-8, -2, 4].forEach((z, i) => part(t, geo.box, mats.boxes[i], 0, 5.3, z, 5.6, 2.6, 5.4));
     } },
 
     /* --- ground: fortified field --- */
@@ -372,7 +432,7 @@
       g.rotation.z = 0.07;
       t.add(g);
     } },
-    deadtree: { label: 'DEAD TREE', w: 1.0, h: 5.2, n: 14, build(t) {
+    deadtree: { label: 'DEAD TREE', w: 1.7, h: 5.2, n: 14, build(t) {
       part(t, geo.deadTrunk, mats.deadwood, 0, 2.5, 0).rotation.z = rand(-0.12, 0.12);
       part(t, geo.branch, mats.deadwood, 0.5, 3.4, 0, 0.8, 0.8, 0.8).rotation.z = -0.9;
       part(t, geo.branch, mats.deadwood, -0.4, 2.6, 0.1, 0.7, 0.6, 0.7).rotation.z = 1;
@@ -389,6 +449,16 @@
       part(t, geo.mound, mats.earth, 0, 0, 0, 1, 0.5, 1);
       part(t, geo.box, mats.timber, 0, 0.7, 3.3, 3, 1.4, 0.3);
       part(t, geo.box, mats.burnt, 0, 0.9, 3.36, 1.7, 0.35, 0.3);
+    } },
+    barricade: { label: 'BARRICADE', w: 1.7, h: 1.7, n: 8, fixed: true, across: true, build(t) {
+      part(t, geo.box, mats.timber, 0, 0.9, 0, 3, 0.2, 0.2);
+      [-1.2, 0, 1.2].forEach((x) => part(t, geo.box, mats.timber, x, 0.8, 0, 0.16, 1.6, 0.16).rotation.x = 0.5);
+    } },
+    shelter: { label: 'SHELTER', w: 3.2, h: 3.2, n: 4, far: true, fixed: true, build(t) {
+      part(t, geo.gable, mats.sandbag, 0, 1, 0, 4, 2, 2.6);
+    } },
+    supply: { label: 'SUPPLY CRATE', w: 1.1, h: 1.1, n: 10, fixed: true, build(t) {
+      part(t, geo.box, mats.wood, 0, 0.5, 0, 1.2, 1, 1.2);
     } },
   };
 
@@ -419,22 +489,41 @@
     sea: {
       alt: 1.7, speed: 10, margin: 1.6, limit: 13, field: 34, straight: [14, 30],
       len: (delta) => clamp(delta * 7, 30, 55),
-      blockers: ['debris', 'log', 'container', 'buoy', 'barrel', 'debris'],
-      scatter: [['debris', 18], ['log', 30], ['barrel', 24], ['buoy', 50]],
-      extras(s0, s1) { if (Math.random() < 0.3) scatter('port', s0, s1); },
+      // two locations: open water with a heavy swell, and the sheltered approach to a port
+      locs: {
+        open: {
+          amp: 1,
+          blockers: ['debris', 'log', 'container', 'barrel', 'boat', 'debris'],
+          scatter: [['debris', 20], ['log', 30], ['barrel', 26], ['buoy', 60], ['boat', 80]],
+          extras(s0, s1) { if (Math.random() < 0.15) scatter('cargoship', s0, s1); },
+        },
+        port: {
+          amp: 0.35,
+          blockers: ['boat', 'buoy', 'container', 'boat', 'debris', 'buoy'],
+          scatter: [['buoy', 18], ['boat', 20], ['container', 45], ['debris', 34], ['barrel', 40]],
+          extras(s0, s1) {
+            if (Math.random() < 0.6) scatter('port', s0, s1);
+            if (Math.random() < 0.7) scatter('cargoship', s0, s1);
+          },
+        },
+      },
     },
     ground: {
       alt: 1.3, speed: 7, margin: 1.2, limit: 10, field: 26, straight: [10, 22],
       len: (delta) => clamp(delta * 6, 22, 46),
-      blockers: ['trench', 'hedgehog', 'crater', 'wire', 'wreck', 'block'],
-      scatter: [['hedgehog', 13], ['crater', 14], ['deadtree', 9], ['block', 24]],
+      blockers: ['trench', 'hedgehog', 'crater', 'wire', 'wreck', 'block', 'barricade'],
+      scatter: [['hedgehog', 13], ['crater', 14], ['deadtree', 9], ['block', 24], ['barricade', 26], ['supply', 20]],
       extras(s0, s1) {
         if (Math.random() < 0.3) scatter('dugout', s0, s1);
+        if (Math.random() < 0.4) scatter('shelter', s0, s1);
         if (Math.random() < 0.25) scatter('wreck', s0, s1);
       },
     },
   };
-  let envName = ENV[window.fnavEnv] ? window.fnavEnv : 'air', cfg = ENV[envName];
+  let loc = window.fnavLoc === 'port' ? 'port' : 'open';
+  // an environment's settings, with those of the chosen location laid over them
+  const resolve = (name) => Object.assign({ amp: 1 }, ENV[name], ENV[name].locs ? ENV[name].locs[loc] : null);
+  let envName = ENV[window.fnavEnv] ? window.fnavEnv : 'air', cfg = resolve(envName);
 
   const DEPTH = 190;
   const objects = [];
@@ -454,41 +543,81 @@
   const take = (type) => free[type].pop();
   const release = (o) => { o.visible = false; free[o.userData.type].push(o); };
 
-  /* ----- ready-made models (Kenney Nature Kit, CC0 - see models/LICENSE-kenney-nature-kit.txt).
+  /* ----- ready-made models, all CC0 (licence files sit next to them in models/):
+     trees by Quaternius; rocks, boats, buoys, cargo, crates and tents by Kenney.
      The hand-built shapes above are placeholders: they show at once and stay as the
      fallback (e.g. when the page is opened from disk and files cannot be fetched).
-     Once a class has loaded, every pooled object of that class swaps to a real model.
-     fit = which dimension is matched to the class: 'h' height, 'w' footprint. ----- */
+     Models are fetched per environment, the first time it is shown; once a class has
+     loaded, every pooled object of that class swaps to a real model.
+     fit = which dimension is matched to the class: 'h' height, 'w' footprint.
+     set = the file holds several models side by side (five trees), used one by one. ----- */
   const MODELS = {
-    pine: { fit: 'h', files: ['tree_pineTallA_detailed', 'tree_pineTallB_detailed', 'tree_pineTallC_detailed', 'tree_pineTallD_detailed'] },
-    tree: { fit: 'h', files: ['tree_oak', 'tree_detailed', 'tree_fat', 'tree_default_dark'] },
-    rock: { fit: 'w', files: ['rock_largeA', 'rock_largeC', 'rock_largeE', 'stone_largeB'] },
-    log: { fit: 'w', files: ['log_large', 'log'] },
+    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'] },
+    tree: { env: 'air', fit: 'h', set: true, files: ['trees/broadleaf'] },
+    rock: { env: 'air', fit: 'w', files: ['rock_largeA', 'rock_largeC', 'rock_largeE', 'stone_largeB'] },
+    log: { env: 'sea', fit: 'w', files: ['log_large', 'log'] },
+    buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'] },
+    container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'] },
+    barrel: { env: 'sea', fit: 'w', files: ['pirate/barrel'] },
+    debris: { env: 'sea', fit: 'w', files: ['pirate/crate', 'survival/box-large'] },
+    boat: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small', 'watercraft/boat-speed-a'] },
+    cargoship: { env: 'sea', fit: 'w', files: ['watercraft/ship-cargo-a', 'watercraft/ship-cargo-b', 'watercraft/ship-cargo-c'] },
+    deadtree: { env: 'ground', fit: 'h', set: true, files: ['trees/dead'] },
+    barricade: { env: 'ground', fit: 'w', files: ['survival/fence-fortified'] },
+    shelter: { env: 'ground', fit: 'w', files: ['survival/tent', 'survival/tent-canvas', 'survival/structure-canvas', 'survival/structure-metal'] },
+    supply: { env: 'ground', fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
   };
-  if (THREE.GLTFLoader) {
+  const loadModels = (() => {
+    if (!THREE.GLTFLoader) return () => {};
     const loader = new THREE.GLTFLoader(), bb = new THREE.Box3(), size = new THREE.Vector3(), mid = new THREE.Vector3();
+    const asked = {};
     const load = (name) => new Promise((ok) => loader.load('models/' + name + '.glb', (g) => ok(g.scene), undefined, () => ok(null)));
-    Object.keys(MODELS).forEach((type) => {
-      const cls = CLASSES[type], spec = MODELS[type];
-      Promise.all(spec.files.map(load)).then((scenes) => {
-        const ready = scenes.filter(Boolean).map((sc) => {
-          bb.setFromObject(sc); bb.getSize(size); bb.getCenter(mid);
-          const r = Math.max(size.x, size.z) / 2;
-          let k = spec.fit === 'h' ? cls.h / size.y : cls.w * 0.95 / r;
-          // never wider than the footprint the route planner already assumes for this class
-          const kxz = Math.min(k, cls.w / r);
-          sc.scale.set(kxz, k, kxz);
-          sc.position.set(-mid.x * kxz, -bb.min.y * k, -mid.z * kxz);
-          sc.traverse((m) => {
-            if (!m.isMesh) return;
-            m.castShadow = m.receiveShadow = true;
-            m.material.metalness = 0;   // the kit ships fully metallic materials, which render black here
-            m.material.roughness = 0.9;
-          });
-          const holder = new THREE.Group();
-          holder.add(sc);
-          return holder;
+    // pull the individual models out of a set, keeping the transforms of the nodes above them
+    const split = (sc) => {
+      sc.updateMatrixWorld(true);
+      let node = sc;
+      while (node.children.length === 1 && !node.isMesh) node = node.children[0];
+      return node.children.slice().map((p) => {
+        p.matrixWorld.decompose(p.position, p.quaternion, p.scale);
+        node.remove(p);
+        return p;
+      });
+    };
+    // scale a model to its class, stand it on the ground (or sink it into the water), centre it
+    const prepare = (node, cls, fit) => {
+      bb.setFromObject(node); bb.getSize(size); bb.getCenter(mid);
+      const r = Math.max(size.x, size.z) / 2;
+      const k = fit === 'h' ? cls.h / size.y : cls.w * 0.95 / r;
+      const kxz = Math.min(k, cls.w / r); // never wider than the footprint the route already assumes
+      const inner = new THREE.Group();
+      inner.add(node);
+      inner.scale.set(kxz, k, kxz);
+      inner.position.set(-mid.x * kxz, (-bb.min.y - (cls.sink || 0) * size.y) * k, -mid.z * kxz);
+      node.traverse((m) => {
+        if (!m.isMesh) return;
+        m.castShadow = m.receiveShadow = true;
+        (Array.isArray(m.material) ? m.material : [m.material]).forEach((mat) => {
+          mat.metalness = 0; // some kits ship fully metallic materials, which render black here
+          mat.roughness = 0.9;
+          if (mat.transparent) { // leaf cards: hard cut-out instead of blending, so they sort and shadow correctly
+            mat.transparent = false;
+            mat.alphaTest = 0.5;
+            mat.side = THREE.DoubleSide;
+            m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: mat.map, alphaTest: 0.5 });
+          }
         });
+      });
+      const holder = new THREE.Group();
+      holder.add(inner);
+      return holder;
+    };
+    return (env) => Object.keys(MODELS).forEach((type) => {
+      const spec = MODELS[type], cls = CLASSES[type];
+      if (spec.env !== env || asked[type]) return;
+      asked[type] = true;
+      Promise.all(spec.files.map(load)).then((scenes) => {
+        const ready = [];
+        scenes.filter(Boolean).forEach((sc) => (spec.set ? split(sc) : [sc]).forEach((n) => ready.push(prepare(n, cls, spec.fit))));
         if (!ready.length) return;
         objects.forEach((o) => {
           if (o.userData.type !== type) return;
@@ -498,7 +627,7 @@
         if (!raf) render();
       });
     });
-  }
+  })();
 
   // crop fields beside the route: striped planes in a few crop colours
   const rowTex = (() => {
@@ -559,6 +688,7 @@
     o.scale.setScalar(scale);
     o.rotation.set(0, c.face ? (side > 0 ? 0 : Math.PI)
       : c.across ? rand(-0.25, 0.25)
+      : c.along ? rand(-0.12, 0.12) + (Math.random() < 0.5 ? 0 : Math.PI)
       : c.far ? rand(-0.5, 0.5) + (Math.random() < 0.5 ? 0 : Math.PI / 2)
       : rand(0, Math.PI * 2), 0);
     o.position.set(x, 0, dist - s);
@@ -649,7 +779,10 @@
     water.visible = sea;
     ridge.visible = !sea;                       // open horizon at sea
     if (!sea) groundMat.color.set(GROUND[envName][day ? 0 : 1]);
-    waterMat.color.set(day ? 0x2c6f80 : 0x0e2a36);
+    waterMat.color.set(day ? 0x1d5a6c : 0x0a222c);
+    waterMat.envMap = SKY_ENV[day ? 'day' : 'night'];
+    waterMat.envMapIntensity = day ? 1 : 0.7;
+    waterMat.needsUpdate = true;
     ridgeMat.color.set(day ? 0x9fb3c4 : 0x0c1222);
     disc.material.color.set(day ? 0xfff0c0 : 0xe6ecff);
     halo.material.color.set(day ? 0xffd9a0 : 0x8fa6ff);
@@ -669,7 +802,9 @@
   // switch environment: clear the world and regenerate it from the current position
   function setEnv(name) {
     if (!ENV[name]) return;
-    envName = name; cfg = ENV[name];
+    envName = name; cfg = resolve(name);
+    seaAmp = cfg.amp;
+    loadModels(name);
     objects.forEach((o) => { if (o.visible) release(o); });
     fields.forEach((f) => { if (f.visible) { f.visible = false; freeFields.push(f); } });
     const x = clamp(camera.position.x, -cfg.limit * 0.5, cfg.limit * 0.5);
@@ -682,6 +817,10 @@
     applyLook();
   }
   document.addEventListener('envchange', (e) => setEnv(e.detail));
+  document.addEventListener('locchange', (e) => {
+    loc = e.detail === 'port' ? 'port' : 'open';
+    if (envName === 'sea') setEnv('sea');
+  });
 
   /* ----- motion ----- */
   // place the camera for the current distance; each platform moves in its own way
@@ -723,12 +862,24 @@
     groundTex.offset.y += speed * dt / TILE;
     if (sea) {
       // the surface follows the camera sideways in whole cells; heights come from world coordinates
-      const cell = WSIZE / WSEG, p = waterGeo.attributes.position;
+      const cell = WSIZE / WSEG, p = waterGeo.attributes.position, nrm = waterGeo.attributes.normal, col = waterGeo.attributes.color;
       water.position.x = Math.round(camera.position.x / cell) * cell;
       for (let i = 0; i < p.count; i++) {
-        p.setY(i, wave(p.getX(i) + water.position.x, dist - (p.getZ(i) + water.position.z), time));
+        const x = p.getX(i) + water.position.x, s = dist - (p.getZ(i) + water.position.z);
+        let h = 0, hx = 0, hs = 0; // height and its slopes across / along
+        for (const q of WAVES) {
+          const ph = q.kx * x + q.ks * s + q.w * time + q.ph, c = q.a * Math.cos(ph);
+          h += q.a * Math.sin(ph); hx += c * q.kx; hs += c * q.ks;
+        }
+        h *= seaAmp; hx *= seaAmp; hs *= seaAmp;
+        const inv = 1 / Math.hypot(hx, 1, hs);
+        p.setY(i, h);
+        nrm.setXYZ(i, -hx * inv, inv, hs * inv);   // exact normal -> smooth highlights
+        const c = 0.82 + clamp(h, -0.4, 0.9) * 0.4;  // crests catch more light than troughs
+        col.setXYZ(i, c, c, c);
       }
-      p.needsUpdate = true;
+      p.needsUpdate = nrm.needsUpdate = col.needsUpdate = true;
+      rippleTex.offset.set(time * 0.02 + water.position.x / 10, dist / 10 + time * 0.03);
     }
     for (const o of objects) {
       if (!o.visible) continue;
@@ -889,6 +1040,8 @@
   modeBtn.addEventListener('click', () => { day = !day; syncUi(); applyLook(); });
   syncUi();
 
+  seaAmp = cfg.amp;
+  loadModels(envName);
   extend();
   applyLook();
 })();

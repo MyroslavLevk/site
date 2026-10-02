@@ -97,10 +97,17 @@
     // environment switch: the Air / Sea / Ground panels and the demo buttons drive the 3D scene.
     // window.fnavEnv covers the case where a panel is clicked before the 3D code has loaded.
     const envButtons = document.querySelectorAll('[data-env]');
+    const locBox = document.getElementById('simLoc'), locButtons = locBox.querySelectorAll('[data-loc]');
+    locButtons.forEach((b) => b.addEventListener('click', () => {
+      window.fnavLoc = b.dataset.loc;
+      document.dispatchEvent(new CustomEvent('locchange', { detail: b.dataset.loc }));
+      locButtons.forEach((o) => o.classList.toggle('is-active', o === b));
+    }));
     const setEnv = (env, jump) => {
       window.fnavEnv = env;
       document.dispatchEvent(new CustomEvent('envchange', { detail: env }));
       envButtons.forEach((b) => b.classList.toggle('is-active', b.dataset.env === env));
+      locBox.hidden = env !== 'sea'; // only the sea has locations to choose from
       if (jump) document.getElementById('flight').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
     };
     envButtons.forEach((b) => {

@@ -813,3 +813,5 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   .seg .tbtn { flex: 1; }
   .demo__note { margin: 0; }
 }
+
+.seg[hidden] { display: none; }
