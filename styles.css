@@ -159,8 +159,13 @@ ul { list-style: none; }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  /* as the V lifts off, F N A drift apart to take over the freed width */
-  transform: translateX(calc(var(--p) * var(--i) * .36em));
+  /* As the V lifts off, F N A take over its width and stretch upward like spaghetti.
+     Per letter: --tx shift, --sx extra width (negative = pinched), --o horizontal origin.
+     The outer letters widen and the middle one narrows, so the word pinches at the centre. */
+  transform-origin: var(--o, 50%) 100%;
+  transform:
+    translateX(calc(var(--p) * var(--tx, 0em)))
+    scale(calc(1 + var(--p) * var(--sx, 0)), calc(1 + var(--p) * 1.6));
   transition: transform .9s var(--ease);
 }
 
