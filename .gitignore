@@ -16,5 +16,3 @@ dist/
 .env
 .env.*
 
-# Local-only redesign draft
-v2/
