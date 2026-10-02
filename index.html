@@ -52,31 +52,29 @@
         </div>
       </div>
 
-      <!-- full-width wordmark on the bottom edge; the "A" is a fixed-wing drone seen from above -->
+      <!-- full-width wordmark on the bottom edge; the "V" is a flying-wing drone seen from above, nose down -->
       <h1 class="wordmark" id="wordmark" aria-label="FNAV">
         <span class="wordmark__in" aria-hidden="true">
           <span class="letter" style="--i:0">F</span>
           <span class="letter" style="--i:1">N</span>
+          <span class="letter" style="--i:2">A</span>
           <span class="letter letter--drone">
             <svg class="glyph" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <!-- swept wings = the legs of the A -->
-              <path class="glyph__body" d="M45 12L2 91l-2 9h21l26-56zM55 12l43 79 2 9H79L53 44z"/>
-              <!-- tailplane = the crossbar -->
-              <rect class="glyph__body" x="25" y="60" width="50" height="13" rx="3"/>
-              <!-- fuselage with a rounded nose -->
-              <path class="glyph__body" d="M50 0c6 0 9 8 9 17v52H41V17c0-9 3-17 9-17z"/>
-              <path class="glyph__line" d="M41 20v40M59 20v40M12 86l12-26M88 86L76 60M31 66.500h38"/>
+              <!-- swept wings = the arms of the V -->
+              <path class="glyph__body" d="M45 88L2 9 0 0h21l26 56zM55 88L98 9l2-9H79L53 56z"/>
+              <!-- fuselage, rounded nose at the vertex -->
+              <path class="glyph__body" d="M50 100c6 0 9-8 9-17V50H41v33c0 9 3 17 9 17z"/>
+              <path class="glyph__line" d="M41 80V52M59 80V52M12 14l12 26M88 14L76 40"/>
               <!-- sensor dome -->
-              <circle class="glyph__cut" cx="50" cy="13" r="5"/>
-              <circle class="glyph__accent" cx="50" cy="13" r="2.200"/>
+              <circle class="glyph__cut" cx="50" cy="87" r="5"/>
+              <circle class="glyph__accent" cx="50" cy="87" r="2.2"/>
               <!-- wingtip lights -->
-              <path class="glyph__accent glyph__led" d="M0 100l2-9h8l-3 9zM100 100l-2-9h-8l3 9z"/>
+              <path class="glyph__accent glyph__led" d="M0 0l2 9h8L7 0zM100 0l-2 9h-8l3-9z"/>
               <!-- pusher motor and spinning propeller -->
-              <rect class="glyph__body" x="46" y="69" width="8" height="11" rx="2"/>
-              <ellipse class="glyph__prop" cx="50" cy="83" rx="15" ry="2.600"/>
+              <rect class="glyph__body" x="46" y="40" width="8" height="11" rx="2"/>
+              <ellipse class="glyph__prop" cx="50" cy="37" rx="15" ry="2.6"/>
             </svg>
           </span>
-          <span class="letter" style="--i:3">V</span>
         </span>
       </h1>
     </div>

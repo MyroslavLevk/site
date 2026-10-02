@@ -162,11 +162,11 @@ ul { list-style: none; }
   color: transparent;
 }
 
-/* the "A" is a drone: it lifts off while the rest of the word sinks */
+/* the "V" is a drone: it holds position while the rest of the word sinks */
 .letter--drone {
   background: none;
-  margin: 0 .02em 0 .01em;
-  transform: translateY(calc(var(--p) * -170%));
+  margin-left: -.02em;
+  transform: translateY(calc(var(--p) * -115%));
 }
 .glyph {
   display: block;
