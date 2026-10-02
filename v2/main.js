@@ -120,6 +120,7 @@
       if (!e.isIntersecting) return;
       lazy.disconnect();
       load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
+        .then(() => load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js').catch(() => {})) // optional: models fall back to built-in shapes
         .then(() => load('game3d.js'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });

@@ -454,6 +454,52 @@
   const take = (type) => free[type].pop();
   const release = (o) => { o.visible = false; free[o.userData.type].push(o); };
 
+  /* ----- ready-made models (Kenney Nature Kit, CC0 - see models/LICENSE-kenney-nature-kit.txt).
+     The hand-built shapes above are placeholders: they show at once and stay as the
+     fallback (e.g. when the page is opened from disk and files cannot be fetched).
+     Once a class has loaded, every pooled object of that class swaps to a real model.
+     fit = which dimension is matched to the class: 'h' height, 'w' footprint. ----- */
+  const MODELS = {
+    pine: { fit: 'h', files: ['tree_pineTallA_detailed', 'tree_pineTallB_detailed', 'tree_pineTallC_detailed', 'tree_pineTallD_detailed'] },
+    tree: { fit: 'h', files: ['tree_oak', 'tree_detailed', 'tree_fat', 'tree_default_dark'] },
+    rock: { fit: 'w', files: ['rock_largeA', 'rock_largeC', 'rock_largeE', 'stone_largeB'] },
+    log: { fit: 'w', files: ['log_large', 'log'] },
+  };
+  if (THREE.GLTFLoader) {
+    const loader = new THREE.GLTFLoader(), bb = new THREE.Box3(), size = new THREE.Vector3(), mid = new THREE.Vector3();
+    const load = (name) => new Promise((ok) => loader.load('models/' + name + '.glb', (g) => ok(g.scene), undefined, () => ok(null)));
+    Object.keys(MODELS).forEach((type) => {
+      const cls = CLASSES[type], spec = MODELS[type];
+      Promise.all(spec.files.map(load)).then((scenes) => {
+        const ready = scenes.filter(Boolean).map((sc) => {
+          bb.setFromObject(sc); bb.getSize(size); bb.getCenter(mid);
+          const r = Math.max(size.x, size.z) / 2;
+          let k = spec.fit === 'h' ? cls.h / size.y : cls.w * 0.95 / r;
+          // never wider than the footprint the route planner already assumes for this class
+          const kxz = Math.min(k, cls.w / r);
+          sc.scale.set(kxz, k, kxz);
+          sc.position.set(-mid.x * kxz, -bb.min.y * k, -mid.z * kxz);
+          sc.traverse((m) => {
+            if (!m.isMesh) return;
+            m.castShadow = m.receiveShadow = true;
+            m.material.metalness = 0;   // the kit ships fully metallic materials, which render black here
+            m.material.roughness = 0.9;
+          });
+          const holder = new THREE.Group();
+          holder.add(sc);
+          return holder;
+        });
+        if (!ready.length) return;
+        objects.forEach((o) => {
+          if (o.userData.type !== type) return;
+          while (o.children.length) o.remove(o.children[0]);
+          o.add(pick(ready).clone());
+        });
+        if (!raf) render();
+      });
+    });
+  }
+
   // crop fields beside the route: striped planes in a few crop colours
   const rowTex = (() => {
     const c = document.createElement('canvas');
