@@ -167,7 +167,7 @@ ul { list-style: none; }
   transition: transform .9s var(--ease);
 }
 
-/* the "V" is a drone: it takes off - climbs up and away, getting a little smaller */
+/* the "V" is a drone: it takes off - climbs up and away, shrinking to under half its size */
 .letter--drone {
   position: relative;
   z-index: 1;
@@ -177,7 +177,7 @@ ul { list-style: none; }
   transform:
     translate(calc(var(--p) * -.25em), calc(var(--p) * -58vh))
     rotate(calc(var(--p) * -6deg))
-    scale(calc(1 - var(--p) * .3));
+    scale(calc(1 - var(--p) * .55));
   transition: transform .7s var(--ease);
   filter: drop-shadow(0 calc(.02em + var(--p) * .12em) calc(.03em + var(--p) * .1em) rgba(0, 0, 0, .35));
 }
