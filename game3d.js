@@ -261,48 +261,54 @@
 
   /* ----- autopilot ----- */
   let speed = 18, dist = 0, time = 0, last = 0, raf = 0, visible = false;
-  let goal = 0, goalS = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
+  let goal = 0, s1 = 0, s2 = 0, s3 = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
   camera.position.set(0, CRUISE_ALT, 0);
 
-  // pick the lateral position with the lowest cost over the next few seconds of flight
+  // cost of holding lateral position x over the next ~8 seconds of flight
+  function costAt(x) {
+    let cost = Math.abs(x) * 0.03 + Math.abs(x - camera.position.x) * 0.1;
+    for (const o of objects) {
+      const d = -o.position.z;
+      if (!o.userData.avoid || d < -2 || d > 150) continue;
+      const gap = Math.abs(x - o.position.x) - (o.userData.w + 1.6); // 1.6 = airframe + margin
+      const near = 1 / (1 + d / 30);
+      cost += gap < 0 ? 120 * near : 4 * Math.exp(-gap) * near;
+    }
+    return cost;
+  }
+  // The planner commits: it keeps the current route unless another one is clearly better.
   function plan() {
-    let best = goal, bestCost = Infinity;
+    let best = goal, bestCost = costAt(goal) - 2.5;
     for (let x = -15; x <= 15; x += 0.5) {
-      // prefer the centre, short manoeuvres, and sticking with the current decision
-      let cost = Math.abs(x) * 0.03 + Math.abs(x - camera.position.x) * 0.12 + Math.abs(x - goal) * 0.25;
-      for (const o of objects) {
-        const d = -o.position.z;
-        if (!o.userData.avoid || d < -2 || d > 110) continue;
-        const gap = Math.abs(x - o.position.x) - (o.userData.w + 1.3); // 1.3 = airframe + margin
-        const near = 1 / (1 + d / 18);
-        cost += gap < 0 ? 120 * near : 4 * Math.exp(-gap) * near;
-      }
-      if (cost < bestCost) { bestCost = cost; best = x; }
+      const c = costAt(x);
+      if (c < bestCost) { bestCost = c; best = x; }
     }
     goal = best;
   }
 
   function update(dt) {
     time += dt;
-    speed = 18 + Math.sin(time * 0.15) * 2;
+    speed = 17 + Math.sin(time * 0.12) * 1.5;
     dist += speed * dt;
     planT -= dt;
-    if (planT <= 0) { planT = 0.12; plan(); }
+    if (planT <= 0) { planT = 0.3; plan(); }
 
-    // Flight dynamics: the airframe has inertia. A critically damped controller asks
-    // for a lateral acceleration, which is capped and rate-limited (no instant jerks);
-    // bank angle follows from that acceleration, as in a real coordinated turn.
-    const OMEGA = 1.4, A_MAX = 6, V_MAX = 7;
-    goalS += (goal - goalS) * Math.min(1, dt * 1.5);
-    const want = clamp(OMEGA * OMEGA * (goalS - camera.position.x) - 2 * OMEGA * vx, -A_MAX, A_MAX);
-    ax += (want - ax) * Math.min(1, dt * 3);
-    vx = clamp(vx + ax * dt, -V_MAX, V_MAX);
-    camera.position.x += vx * dt;
-    camera.position.y = CRUISE_ALT + Math.sin(time * 0.5) * 0.15;
-    roll += (-Math.atan(ax / 9.81) * 0.8 - roll) * Math.min(1, dt * 3);
-    camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30); // nose follows the velocity vector
+    // Flight path: the route decision passes through three cascaded low-pass filters,
+    // so position, velocity AND acceleration are all continuous. The result is the
+    // long S-curve a real airframe flies, with no snaps and no overshoot.
+    const TAU = 0.95, k = 1 - Math.exp(-dt / TAU);
+    s1 += (goal - s1) * k;
+    s2 += (s1 - s2) * k;
+    s3 += (s2 - s3) * k;
+    camera.position.x = s3;
+    vx = (s2 - s3) / TAU;
+    ax = (s1 - 2 * s2 + s3) / (TAU * TAU);
+    camera.position.y = CRUISE_ALT + Math.sin(time * 0.4) * 0.12;
+    // bank angle follows lateral acceleration (coordinated turn); nose follows the velocity vector
+    roll += (-Math.atan(ax / 9.81) - roll) * Math.min(1, dt * 2.5);
+    camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30);
     camera.rotateZ(roll);
-    camera.fov = 62 + (speed - 18) * 0.4;
+    camera.fov = 62;
     camera.updateProjectionMatrix();
 
     groundTex.offset.y += speed * dt / TILE;
@@ -356,7 +362,7 @@
     let pen = false;
     for (let d = 4; d <= 46; d += 3) {
       const k = Math.min(1, d / 30), ease = k * k * (3 - 2 * k);
-      const s = toScreen(camera.position.x + (goal - camera.position.x) * ease, 0.05, -d);
+      const s = toScreen(camera.position.x + (s1 - camera.position.x) * ease, 0.05, -d);
       if (!s) continue;
       if (pen) h2.lineTo(s[0], s[1]); else { h2.moveTo(s[0], s[1]); pen = true; }
     }
