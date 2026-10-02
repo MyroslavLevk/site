@@ -261,19 +261,20 @@
 
   /* ----- autopilot ----- */
   let speed = 18, dist = 0, time = 0, last = 0, raf = 0, visible = false;
-  let goal = 0, planT = 0, vx = 0, W = 1, H = 1, tracked = 0;
+  let goal = 0, goalS = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
   camera.position.set(0, CRUISE_ALT, 0);
 
   // pick the lateral position with the lowest cost over the next few seconds of flight
   function plan() {
     let best = goal, bestCost = Infinity;
     for (let x = -15; x <= 15; x += 0.5) {
-      let cost = Math.abs(x) * 0.03 + Math.abs(x - camera.position.x) * 0.12;
+      // prefer the centre, short manoeuvres, and sticking with the current decision
+      let cost = Math.abs(x) * 0.03 + Math.abs(x - camera.position.x) * 0.12 + Math.abs(x - goal) * 0.25;
       for (const o of objects) {
         const d = -o.position.z;
-        if (!o.userData.avoid || d < -2 || d > 80) continue;
+        if (!o.userData.avoid || d < -2 || d > 110) continue;
         const gap = Math.abs(x - o.position.x) - (o.userData.w + 1.3); // 1.3 = airframe + margin
-        const near = 1 / (1 + d / 12);
+        const near = 1 / (1 + d / 18);
         cost += gap < 0 ? 120 * near : 4 * Math.exp(-gap) * near;
       }
       if (cost < bestCost) { bestCost = cost; best = x; }
@@ -283,18 +284,25 @@
 
   function update(dt) {
     time += dt;
-    speed = 18 + Math.sin(time * 0.3) * 3;
+    speed = 18 + Math.sin(time * 0.15) * 2;
     dist += speed * dt;
     planT -= dt;
     if (planT <= 0) { planT = 0.12; plan(); }
 
-    const px = camera.position.x;
-    camera.position.x += (goal - px) * Math.min(1, dt * 1.6);
-    camera.position.y = CRUISE_ALT + Math.sin(time * 0.7) * 0.25;
-    vx += ((camera.position.x - px) / dt - vx) * Math.min(1, dt * 6);
-    camera.lookAt(camera.position.x + vx * 0.9, camera.position.y - 0.3, -30);
-    camera.rotateZ(clamp(-vx * 0.035, -0.32, 0.32)); // bank into the turn
-    camera.fov = 62 + (speed - 18) * 0.8;
+    // Flight dynamics: the airframe has inertia. A critically damped controller asks
+    // for a lateral acceleration, which is capped and rate-limited (no instant jerks);
+    // bank angle follows from that acceleration, as in a real coordinated turn.
+    const OMEGA = 1.4, A_MAX = 6, V_MAX = 7;
+    goalS += (goal - goalS) * Math.min(1, dt * 1.5);
+    const want = clamp(OMEGA * OMEGA * (goalS - camera.position.x) - 2 * OMEGA * vx, -A_MAX, A_MAX);
+    ax += (want - ax) * Math.min(1, dt * 3);
+    vx = clamp(vx + ax * dt, -V_MAX, V_MAX);
+    camera.position.x += vx * dt;
+    camera.position.y = CRUISE_ALT + Math.sin(time * 0.5) * 0.15;
+    roll += (-Math.atan(ax / 9.81) * 0.8 - roll) * Math.min(1, dt * 3);
+    camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30); // nose follows the velocity vector
+    camera.rotateZ(roll);
+    camera.fov = 62 + (speed - 18) * 0.4;
     camera.updateProjectionMatrix();
 
     groundTex.offset.y += speed * dt / TILE;
