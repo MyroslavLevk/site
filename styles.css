@@ -160,16 +160,26 @@ ul { list-style: none; }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  /* as the V lifts off, F N A glide apart to take over the freed width (--k = share of it) */
-  transform: translateX(calc(var(--p) * var(--k, 0) * var(--vw, .8) * 1em));
+  /* as the V flies at the viewer, F N A shrink toward the middle letter and dim (--o = origin) */
+  transform-origin: var(--o, 50%) 100%;
+  transform: scale(calc(1 - var(--p) * .5));
+  opacity: calc(1 - var(--p) * .55);
   transition: transform .9s var(--ease);
 }
 
-/* the "V" is a drone: the only letter that leaves, straight up and out of the frame */
+/* the "V" is a drone: it grows and drifts to the middle of the screen, as if flying straight at us */
 .letter--drone {
+  position: relative;
+  z-index: 1;
   background: none;
-  transform: translateY(calc(var(--p) * -100vh)) scale(calc(1 - var(--p) * .25));
+  opacity: 1;
+  transform-origin: 50% 60%;
+  transform:
+    translate(calc(var(--p) * -1.1em), calc(var(--p) * -22vh))
+    rotate(calc(var(--p) * -7deg))
+    scale(calc(1 + var(--p) * 3.2));
   transition: transform .5s var(--ease);
+  filter: drop-shadow(0 calc(.02em + var(--p) * .12em) calc(.03em + var(--p) * .1em) rgba(0, 0, 0, .35));
 }
 .glyph {
   display: block;
@@ -181,7 +191,11 @@ ul { list-style: none; }
 }
 .glyph__body { fill: var(--fg); transition: fill .5s var(--ease); }
 .glyph__cut { fill: var(--bg); transition: fill .5s var(--ease); }
-.glyph__accent, .glyph__prop { fill: var(--accent); }
+.glyph__accent { fill: var(--accent); }
+.glyph__prop { fill: var(--fg); opacity: .6; }
+.glyph__dark { fill: #000; opacity: .4; }
+.glyph__edge { fill: none; stroke: var(--fg); stroke-width: .8; stroke-linecap: round; opacity: .55; }
+.glyph__strobe { animation: blink .7s steps(2) infinite; }
 .glyph__prop { animation: rotor .1s linear infinite alternate; transform-box: fill-box; transform-origin: center; }
 @keyframes hover { from { transform: translateY(-1.2%) rotate(-1.2deg); } to { transform: translateY(1.2%) rotate(1.2deg); } }
 @keyframes rotor { from { transform: scaleX(1); } to { transform: scaleX(.3); } }
@@ -197,7 +211,7 @@ ul { list-style: none; }
 .hero__points { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .hero__points li::before { content: "✦ "; color: var(--accent); }
 .hero__actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.glyph__line { fill: none; stroke: var(--bg); stroke-width: 1.2; transition: stroke .5s var(--ease); }
+.glyph__line { fill: none; stroke: var(--bg); stroke-width: .7; transition: stroke .5s var(--ease); }
 .glyph__led { animation: blink 1.2s steps(2) infinite; }
 .hero__claim {
   font-size: clamp(28px, 4vw, 56px);

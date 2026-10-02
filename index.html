@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -52,27 +52,57 @@
         </div>
       </div>
 
-      <!-- full-width wordmark on the bottom edge; the "V" is a flying-wing drone seen from above, nose down -->
+      <!-- full-width wordmark on the bottom edge; the "V" is a flying-wing drone seen from above, flying at the viewer -->
       <h1 class="wordmark" id="wordmark" aria-label="FNAV">
         <span class="wordmark__in" aria-hidden="true">
-          <span class="letter" style="--i:0">F</span>
-          <span class="letter" style="--i:1; --k:.5">N</span>
-          <span class="letter" style="--i:2; --k:1">A</span>
+          <span class="letter" style="--i:0; --o:100%">F</span>
+          <span class="letter" style="--i:1">N</span>
+          <span class="letter" style="--i:2; --o:0%">A</span>
           <span class="letter letter--drone">
             <svg class="glyph" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <!-- light from the left: highlight on one wing, shade on the other -->
+                <linearGradient id="gShade" x1="0" x2="1">
+                  <stop offset="0" stop-color="#fff" stop-opacity=".2"/>
+                  <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+                  <stop offset="1" stop-color="#000" stop-opacity=".3"/>
+                </linearGradient>
+                <radialGradient id="gLens" cx=".35" cy=".35" r=".7">
+                  <stop offset="0" stop-color="#9fd0ff"/>
+                  <stop offset=".45" stop-color="#1b2a44"/>
+                  <stop offset="1" stop-color="#05070c"/>
+                </radialGradient>
+                <path id="dWings" d="M45 88L2 9 0 0h21l26 56zM55 88L98 9l2-9H79L53 56z"/>
+                <path id="dBody" d="M50 100c5 0 8.5-7 8.5-16V46c0-3-3-6-8.5-6s-8.5 3-8.5 6v38c0 9 3.5 16 8.5 16z"/>
+              </defs>
+              <!-- pitot tube -->
+              <path class="glyph__edge" d="M50 100v5"/>
               <!-- swept wings = the arms of the V -->
-              <path class="glyph__body" d="M45 88L2 9 0 0h21l26 56zM55 88L98 9l2-9H79L53 56z"/>
-              <!-- fuselage, rounded nose at the vertex -->
-              <path class="glyph__body" d="M50 100c6 0 9-8 9-17V50H41v33c0 9 3 17 9 17z"/>
-              <path class="glyph__line" d="M41 80V52M59 80V52M12 14l12 26M88 14L76 40"/>
-              <!-- sensor dome -->
-              <circle class="glyph__cut" cx="50" cy="87" r="5"/>
-              <circle class="glyph__accent" cx="50" cy="87" r="2.2"/>
-              <!-- wingtip lights -->
-              <path class="glyph__accent glyph__led" d="M0 0l2 9h8L7 0zM100 0l-2 9h-8l3-9z"/>
-              <!-- pusher motor and spinning propeller -->
-              <rect class="glyph__body" x="46" y="40" width="8" height="11" rx="2"/>
-              <ellipse class="glyph__prop" cx="50" cy="37" rx="15" ry="2.6"/>
+              <use href="#dWings" class="glyph__body"/>
+              <use href="#dWings" fill="url(#gShade)"/>
+              <!-- leading-edge highlights, elevon hinge lines -->
+              <path class="glyph__edge" d="M4.5 10L46 86M95.5 10L54 86"/>
+              <path class="glyph__line" d="M20.4 10.500L32.1 35.700l4.500-2.100M79.6 10.500L67.9 35.700l-4.500-2.100"/>
+              <!-- winglets -->
+              <path class="glyph__dark" d="M0 0l2 9 3.500-.6L4 0zM100 0l-2 9-3.500-.6L96 0z"/>
+              <!-- pusher engine and propeller (seen edge-on) -->
+              <rect class="glyph__body" x="45.500" y="32" width="9" height="11" rx="2.500"/>
+              <rect class="glyph__dark" x="45.500" y="32" width="9" height="11" rx="2.500"/>
+              <ellipse class="glyph__prop" cx="50" cy="31" rx="16" ry="2.200"/>
+              <!-- fuselage -->
+              <use href="#dBody" class="glyph__body"/>
+              <use href="#dBody" fill="url(#gShade)"/>
+              <path class="glyph__line" d="M41.500 50h17M41.500 80h17"/>
+              <!-- FNAV module: upward-looking star tracker -->
+              <rect class="glyph__accent" x="45" y="56" width="10" height="14" rx="2.200"/>
+              <circle fill="url(#gLens)" cx="50" cy="63" r="3"/>
+              <!-- nose camera turret -->
+              <circle class="glyph__cut" cx="50" cy="89" r="5"/>
+              <circle fill="url(#gLens)" cx="50" cy="89" r="4"/>
+              <!-- navigation lights and tail strobe -->
+              <circle class="glyph__led" fill="#ff3b30" cx="3.500" cy="3.500" r="2"/>
+              <circle class="glyph__led" fill="#30d158" cx="96.500" cy="3.500" r="2"/>
+              <circle class="glyph__strobe" fill="#fff" cx="50" cy="45.500" r="1.400"/>
             </svg>
           </span>
         </span>
@@ -205,6 +235,6 @@
   <a href="#top">Back to top ↑</a>
 </footer>
 
-<script src="main.js?v=5" defer></script>
+<script src="main.js?v=6" defer></script>
 </body>
 </html>

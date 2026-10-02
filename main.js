@@ -102,7 +102,7 @@
       if (!e.isIntersecting) return;
       lazy.disconnect();
       load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
-        .then(() => load('game3d.js?v=5'))
+        .then(() => load('game3d.js?v=6'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);
