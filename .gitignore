@@ -15,3 +15,6 @@ dist/
 *.log
 .env
 .env.*
+
+# Local-only redesign draft
+v2/
