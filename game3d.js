@@ -261,7 +261,7 @@
 
   /* ----- autopilot ----- */
   let speed = 18, dist = 0, time = 0, last = 0, raf = 0, visible = false;
-  let goal = 0, s1 = 0, s2 = 0, s3 = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
+  let goal = 0, gs = 0, s1 = 0, s2 = 0, s3 = 0, planT = 0, vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
   camera.position.set(0, CRUISE_ALT, 0);
 
   // cost of holding lateral position x over the next ~8 seconds of flight
@@ -271,14 +271,14 @@
       const d = -o.position.z;
       if (!o.userData.avoid || d < -2 || d > 150) continue;
       const gap = Math.abs(x - o.position.x) - (o.userData.w + 1.6); // 1.6 = airframe + margin
-      const near = 1 / (1 + d / 30);
+      const near = 1 / (1 + d / 60);
       cost += gap < 0 ? 120 * near : 4 * Math.exp(-gap) * near;
     }
     return cost;
   }
   // The planner commits: it keeps the current route unless another one is clearly better.
   function plan() {
-    let best = goal, bestCost = costAt(goal) - 2.5;
+    let best = goal, bestCost = costAt(goal) - 1.5;
     for (let x = -15; x <= 15; x += 0.5) {
       const c = costAt(x);
       if (c < bestCost) { bestCost = c; best = x; }
@@ -296,8 +296,10 @@
     // Flight path: the route decision passes through three cascaded low-pass filters,
     // so position, velocity AND acceleration are all continuous. The result is the
     // long S-curve a real airframe flies, with no snaps and no overshoot.
-    const TAU = 0.95, k = 1 - Math.exp(-dt / TAU);
-    s1 += (goal - s1) * k;
+    // The decision itself may flip at any moment, so it is first slewed at a walking pace.
+    const TAU = 1.2, SLEW = 2.6, k = 1 - Math.exp(-dt / TAU);
+    gs += clamp(goal - gs, -SLEW * dt, SLEW * dt);
+    s1 += (gs - s1) * k;
     s2 += (s1 - s2) * k;
     s3 += (s2 - s3) * k;
     camera.position.x = s3;
@@ -305,7 +307,7 @@
     ax = (s1 - 2 * s2 + s3) / (TAU * TAU);
     camera.position.y = CRUISE_ALT + Math.sin(time * 0.4) * 0.12;
     // bank angle follows lateral acceleration (coordinated turn); nose follows the velocity vector
-    roll += (-Math.atan(ax / 9.81) - roll) * Math.min(1, dt * 2.5);
+    roll += (-Math.atan(ax / 9.81) * 1.5 - roll) * Math.min(1, dt * 1.5);
     camera.lookAt(camera.position.x + vx / speed * 30, camera.position.y - 0.3, -30);
     camera.rotateZ(roll);
     camera.fov = 62;
