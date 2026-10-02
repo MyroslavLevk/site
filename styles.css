@@ -147,7 +147,6 @@ ul { list-style: none; }
   font-weight: 800;
   padding-bottom: clamp(10px, 1.6vw, 24px);
   white-space: nowrap;
-  transform: translateY(calc(var(--p) * 115%));
   user-select: none;
 }
 .wordmark__in { display: inline-flex; align-items: baseline; }
@@ -160,13 +159,17 @@ ul { list-style: none; }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  /* as the V lifts off, F N A drift apart to take over the freed width */
+  transform: translateX(calc(var(--p) * var(--i) * .36em));
+  transition: transform .9s var(--ease);
 }
 
-/* the "V" is a drone: it holds position while the rest of the word sinks */
+/* the "V" is a drone: the only letter that leaves, straight up and out of the frame */
 .letter--drone {
   background: none;
   margin-left: -.02em;
-  transform: translateY(calc(var(--p) * -115%));
+  transform: translateY(calc(var(--p) * -100vh)) scale(calc(1 - var(--p) * .25));
+  transition: transform .5s var(--ease);
 }
 .glyph {
   display: block;
