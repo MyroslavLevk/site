@@ -47,19 +47,28 @@
   camera.add(head, head.target);
   scene.add(hemi, sun, sun.target);
 
-  /* ----- sky dome with a vertical gradient ----- */
+  /* ----- sky dome: vertical gradient, haze at the horizon and a glow around the sun / moon.
+     Everything in the sky rides along with the camera, so it never comes closer. ----- */
+  const skyGroup = new THREE.Group();
+  scene.add(skyGroup);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } },
-    vertexShader: 'varying float vY; void main(){ vY = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform vec3 top; uniform vec3 bottom; varying float vY;
+    uniforms: {
+      top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() },
+      glowCol: { value: new THREE.Color() }, glowDir: { value: new THREE.Vector3(0, 1, 0) },
+    },
+    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 glowCol; uniform vec3 glowDir; varying vec3 vDir;
       void main(){
-        gl_FragColor = vec4(mix(bottom, top, pow(max(vY, 0.0), 0.55)), 1.0);
+        vec3 c = mix(bottom, top, pow(max(vDir.y, 0.0), 0.38));
+        float d = max(dot(normalize(vDir), glowDir), 0.0);
+        c += glowCol * (pow(d, 12.0) * 0.16 + pow(d, 90.0) * 0.4) * smoothstep(-0.05, 0.1, vDir.y);
+        gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <encodings_fragment>
       }`,
   });
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), skyMat));
+  skyGroup.add(new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), skyMat));
 
   // soft round sprite used for every glow in the scene
   const glowTex = (() => {
@@ -79,7 +88,7 @@
     return s;
   };
 
-  /* ----- stars, sun / moon disc, distant ridge ----- */
+  /* ----- stars, sun, moon ----- */
   const starField = (n, size) => {
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -91,54 +100,170 @@
     return new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size, sizeAttenuation: false, fog: false }));
   };
   const stars = new THREE.Group();
-  stars.add(starField(700, 1.3), starField(90, 2.4));
-  const disc = new THREE.Mesh(new THREE.SphereGeometry(10, 24, 16), new THREE.MeshBasicMaterial({ fog: false }));
-  disc.position.set(-90, 95, -380);
-  const halo = glow(0xffffff, 110);
+  stars.add(starField(900, 1.2), starField(110, 2.2));
+  const SKY_POS = new THREE.Vector3(-90, 95, -380); // where the sun or the moon stands
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ fog: false }));
+  disc.position.copy(SKY_POS);
+  const halo = glow(0xffffff, 55);
   disc.add(halo);
-  scene.add(stars, disc);
+
+  // the moon: a waxing gibbous drawn on a canvas - maria, craters, darker limb, soft terminator
+  const moonTex = (() => {
+    const N = 256, R = N / 2 - 3, c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    const blob = (x, y, r, col) => {
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, col); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    };
+    g.save();
+    g.beginPath(); g.arc(N / 2, N / 2, R, 0, Math.PI * 2); g.clip();
+    g.fillStyle = '#e4e1d8'; g.fillRect(0, 0, N, N);
+    // maria, roughly where they are on the near side
+    [[0.36, 0.3, 0.2], [0.52, 0.36, 0.13], [0.6, 0.52, 0.12], [0.42, 0.52, 0.15], [0.28, 0.46, 0.11],
+      [0.68, 0.36, 0.08], [0.47, 0.68, 0.1], [0.24, 0.62, 0.09]]
+      .forEach(([x, y, r]) => { blob(x * N, y * N, r * N, 'rgba(92,94,104,.55)'); blob(x * N + 6, y * N - 4, r * N * 0.6, 'rgba(80,82,92,.35)'); });
+    for (let i = 0; i < 90; i++) {                       // craters: dark floor, lit rim towards the sun
+      const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * R * 0.95, r = Math.pow(Math.random(), 2.2) * 8 + 1.2;
+      const x = N / 2 + Math.cos(a) * d, y = N / 2 + Math.sin(a) * d;
+      g.fillStyle = 'rgba(40,40,46,.18)'; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(255,255,250,.22)'; g.lineWidth = Math.max(0.8, r * 0.25);
+      g.beginPath(); g.arc(x, y, r, -Math.PI * 0.2, Math.PI * 0.7); g.stroke();
+    }
+    g.strokeStyle = 'rgba(255,255,250,.12)'; g.lineWidth = 1;    // rays of a young crater near the south
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, l = rand(18, 60);
+      g.beginPath(); g.moveTo(N * 0.45, N * 0.83); g.lineTo(N * 0.45 + Math.cos(a) * l, N * 0.83 + Math.sin(a) * l); g.stroke();
+    }
+    blob(N * 0.45, N * 0.83, 6, 'rgba(255,255,250,.7)');
+    const limb = g.createRadialGradient(N / 2, N / 2, R * 0.55, N / 2, N / 2, R);
+    limb.addColorStop(0, 'rgba(0,0,0,0)'); limb.addColorStop(1, 'rgba(10,12,20,.4)');
+    g.fillStyle = limb; g.fillRect(0, 0, N, N);
+    // night side: the left edge, bounded by a half-ellipse terminator, blurred
+    g.filter = 'blur(3px)';
+    g.fillStyle = 'rgba(6,8,16,.94)';
+    g.beginPath();
+    g.arc(N / 2, N / 2, R + 4, Math.PI / 2, Math.PI * 1.5);
+    g.ellipse(N / 2, N / 2, R * 0.62, R + 4, 0, Math.PI * 1.5, Math.PI / 2, true);
+    g.fill();
+    g.restore();
+    const t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  })();
+  const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, fog: false }));
+  moon.scale.setScalar(19);
+  moon.position.copy(SKY_POS);
+  const moonHalo = glow(0x1c2238, 60);
+  moonHalo.position.copy(SKY_POS).multiplyScalar(1.01);
+  skyGroup.add(stars, disc, moonHalo, moon);
+  // light comes from behind-left by day, from the moon at night (so the water shows its path)
+  const LIGHT = { day: new THREE.Vector3(-30, 45, 35).normalize(), night: SKY_POS.clone().sub(new THREE.Vector3(0, 0, -30)).normalize() };
+  let lightDir = LIGHT.day;
 
   // reference points the navigator "locks" onto, drawn in the HUD
   const navStars = [[-0.42, 0.34, -1], [0.08, 0.52, -1], [0.5, 0.3, -1]]
     .map((d) => new THREE.Vector3(...d).normalize().multiplyScalar(400));
   navStars.forEach((p) => { const s = glow(0xcfe0ff, 14); s.position.copy(p); stars.add(s); });
 
-  const ridgeMat = new THREE.MeshBasicMaterial({ fog: false });
-  const ridge = new THREE.Group();
-  for (let i = 0; i < 16; i++) {
-    const m = new THREE.Mesh(new THREE.ConeGeometry(rand(60, 110), rand(30, 75), 5), ridgeMat);
-    m.position.set(-420 + i * 56 + rand(-15, 15), 0, -380 + rand(-20, 20));
-    m.rotation.y = rand(0, 3);
-    ridge.add(m);
-  }
-  scene.add(ridge);
+  /* ----- terrain: gentle rolling ground, the same function on the CPU (to stand objects
+     and the camera on it) and in the ground shader. x across, s along the route. ----- */
+  let terrA = 0; // relief amplitude of the current environment, 0 at sea
+  const terrainH = (x, s) => terrA * (0.55 * Math.sin(0.021 * x + 0.6) * Math.sin(0.017 * s + 1.1)
+    + 0.3 * Math.sin(0.047 * x - 0.033 * s + 2) + 0.15 * Math.sin(0.09 * x + 0.071 * s));
+  const TERRAIN_GLSL = `float terrainH(vec2 p){ return uTerrA * (0.55 * sin(0.021 * p.x + 0.6) * sin(0.017 * p.y + 1.1)
+    + 0.3 * sin(0.047 * p.x - 0.033 * p.y + 2.0) + 0.15 * sin(0.09 * p.x + 0.071 * p.y)); }`;
+  // shared by the ground and water shaders
+  const U = {
+    dist: { value: 0 }, time: { value: 0 }, terrA: { value: 0 }, amp: { value: 1 },
+    dry: { value: new THREE.Vector3(1, 1, 1) },
+    deep: { value: new THREE.Color() }, shallow: { value: new THREE.Color() }, foam: { value: new THREE.Color() },
+  };
 
-  /* ----- ground with a speckle texture that scrolls with speed ----- */
-  const gc = document.createElement('canvas');
-  gc.width = gc.height = 256;
-  const g2 = gc.getContext('2d');
-  g2.fillStyle = '#fff'; g2.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 2600; i++) {
-    g2.fillStyle = `rgba(0,0,0,${rand(0.04, 0.4)})`;
-    g2.fillRect(rand(0, 256), rand(0, 256), rand(1, 5), rand(1, 5));
-  }
-  const groundTex = new THREE.CanvasTexture(gc);
-  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.anisotropy = 4;
-  const TILE = 14; // world units per texture tile
-  groundTex.repeat.set(600 / TILE, 600 / TILE);
+  /* ----- ground: grass / soil detail, large-scale patches against tiling, relief ----- */
+  const tileCanvas = (N, paint) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    // draw with 3x3 wrap-around so the tile is seamless
+    const wrap = (fn) => { for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) { g.save(); g.translate(ox, oy); fn(g); g.restore(); } };
+    paint(g, wrap, N);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  };
+  const groundTex = tileCanvas(256, (g, wrap, N) => {
+    g.fillStyle = '#e8e8e8'; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 40; i++) {                       // clumps and bare patches
+      const x = rand(0, N), y = rand(0, N), r = rand(8, 28), a = rand(0.05, 0.14), lit = Math.random() < 0.4;
+      wrap((c) => {
+        const grd = c.createRadialGradient(x, y, 0, x, y, r);
+        grd.addColorStop(0, lit ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = grd; c.fillRect(x - r, y - r, r * 2, r * 2);
+      });
+    }
+    for (let i = 0; i < 2600; i++) {                     // specks
+      const x = rand(0, N), y = rand(0, N), s = rand(1, 3.5), a = rand(0.05, 0.35);
+      wrap((c) => { c.fillStyle = `rgba(0,0,0,${a})`; c.fillRect(x, y, s, s); });
+    }
+    g.lineWidth = 1;
+    for (let i = 0; i < 1400; i++) {                     // blades
+      const x = rand(0, N), y = rand(0, N), l = rand(2, 6), a = rand(-0.5, 0.5), lit = Math.random() < 0.5;
+      wrap((c) => {
+        c.strokeStyle = lit ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.2)';
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.sin(a) * l, y - Math.cos(a) * l); c.stroke();
+      });
+    }
+  });
+  groundTex.anisotropy = 8;
+  const macroTex = tileCanvas(128, (g, wrap, N) => {   // smooth low-frequency noise
+    g.fillStyle = '#808080'; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 70; i++) {
+      const x = rand(0, N), y = rand(0, N), r = rand(10, 40), a = rand(0.15, 0.35), lit = Math.random() < 0.5;
+      wrap((c) => {
+        const grd = c.createRadialGradient(x, y, 0, x, y, r);
+        grd.addColorStop(0, lit ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(128,128,128,0)');
+        c.fillStyle = grd; c.fillRect(x - r, y - r, r * 2, r * 2);
+      });
+    }
+  });
+  const TILE = 9; // world units per detail tile
   const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), groundMat);
-  ground.rotation.x = -Math.PI / 2;
+  groundMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uDist: U.dist, uTerrA: U.terrA, uDry: U.dry, uMacro: { value: macroTex } });
+    sh.vertexShader = 'uniform float uDist; uniform float uTerrA; varying vec2 vW;\n' + TERRAIN_GLSL + '\n' + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        vec4 wp0 = modelMatrix * vec4(position, 1.0);
+        vec2 P = vec2(wp0.x, uDist - wp0.z);
+        float th = terrainH(P);
+        vec3 objectNormal = normalize(vec3((th - terrainH(P + vec2(0.5, 0.0))) * 2.0, 1.0, (terrainH(P + vec2(0.0, 0.5)) - th) * 2.0));
+        vW = P;`)
+      .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, th, position.z);');
+    sh.fragmentShader = 'uniform sampler2D uMacro; uniform vec3 uDry; varying vec2 vW;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `
+        vec3 det = texture2D(map, vW / ${TILE}.0).rgb;
+        float mac = texture2D(uMacro, vW / 170.0).r, mac2 = texture2D(uMacro, vW / 53.0 + 0.37).r;
+        diffuseColor.rgb *= det * mix(0.72, 1.18, mac);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uDry, smoothstep(0.42, 0.72, mac2));`);
+  };
+  const GCELL = 4;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(720, 520, 720 / GCELL, 520 / GCELL).rotateX(-Math.PI / 2).translate(0, 0, -220), groundMat);
   ground.receiveShadow = true;
+  ground.frustumCulled = false;
   scene.add(ground);
 
-  /* ----- sea: a swell built from four wave trains, smooth-shaded and reflecting the sky ----- */
+  /* ----- sea: a swell of four Gerstner wave trains computed on the GPU. Crests are
+     sharpened by horizontal displacement, tinted where light passes through them and
+     whitened with foam where they pinch. The same heights (vertical part) are computed
+     on the CPU so the boat and the flotsam ride the very waves that are drawn. ----- */
   // direction (across, along), wavelength and amplitude in metres; speed follows deep-water dispersion
-  const WAVES = [[0.2, 1, 62, 0.46], [-0.45, 0.9, 35, 0.27], [0.7, 0.7, 19, 0.13], [-0.8, 0.55, 11, 0.06]].map(([dx, ds, L, a], i) => {
+  const STEEP = 2.4; // Gerstner steepness: 0 = round sine swell, higher = sharper crests
+  const WAVES = [[0.2, 1, 62, 0.55], [-0.45, 0.9, 35, 0.32], [0.7, 0.7, 19, 0.16], [-0.8, 0.55, 11, 0.08]].map(([dx, ds, L, a], i) => {
     const n = Math.hypot(dx, ds), k = Math.PI * 2 / L;
     return { kx: dx / n * k, ks: ds / n * k, w: Math.sqrt(9.81 * k), a, ph: i * 1.7 };
   });
+  const AMP_SUM = WAVES.reduce((m, q) => m + q.a, 0);
   let seaAmp = 1; // sea state: 1 in open water, lower inside a sheltered harbour
   // wave height at world position (x across, s along the route) and time t
   const wave = (x, s, t) => {
@@ -146,19 +271,34 @@
     for (const q of WAVES) h += q.a * Math.sin(q.kx * x + q.ks * s + q.w * t + q.ph);
     return h * seaAmp;
   };
-  const WSIZE = 300, WSEG = 100;
-  const waterGeo = new THREE.PlaneGeometry(WSIZE, WSIZE, WSEG, WSEG).rotateX(-Math.PI / 2);
-  waterGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(waterGeo.attributes.position.count * 3).fill(1), 3));
+  const f6 = (n) => n.toFixed(6);
+  const WAVE_GLSL = WAVES.map((q) => `
+        a = ${f6(q.a)} * uAmp; k = vec2(${f6(q.kx)}, ${f6(q.ks)});
+        ph = dot(k, P) + ${f6(q.w)} * uTime + ${f6(q.ph)}; c = cos(ph); sn = sin(ph);
+        h += a * sn; hx += a * k.x * c; hs += a * k.y * c;
+        dP += ${STEEP.toFixed(2)} * a * normalize(k) * c; pinch += ${STEEP.toFixed(2)} * a * length(k) * sn;`).join('');
+  // a grid that is fine near the boat and coarse towards the horizon
+  const waterGeo = (() => {
+    const g = new THREE.PlaneGeometry(1, 1, 200, 220).rotateX(-Math.PI / 2);
+    const p = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i) * 2, v = 0.5 - p.getZ(i);
+      const x = 230 * (0.3 * u + 0.7 * u * Math.abs(u)), z = 30 - 460 * (0.25 * v + 0.75 * v * v);
+      p.setXYZ(i, x, 0, z);
+      uv.setXY(i, x / 10, -z / 10);
+    }
+    return g;
+  })();
   // ripples too fine for the mesh: a tileable normal map that drifts over the surface
   const rippleTex = (() => {
-    const N = 128, c = document.createElement('canvas');
+    const N = 256, c = document.createElement('canvas');
     c.width = c.height = N;
     const ctx = c.getContext('2d'), img = ctx.createImageData(N, N);
-    const F = [[3, 1, 0], [-2, 4, 1.3], [5, -3, 2.1], [1, 6, 0.7], [7, 2, 4.2]]; // whole periods -> seamless
+    const F = [[3, 1, 0], [-2, 4, 1.3], [5, -3, 2.1], [1, 6, 0.7], [7, 2, 4.2], [-9, 5, 1.1], [11, -4, 3.3], [4, 13, 5.2], [-14, -7, 0.4]]; // whole periods -> seamless
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       let nx = 0, ny = 0;
       for (const [a, b, ph] of F) {
-        const d = Math.cos(Math.PI * 2 * (a * x + b * y) / N + ph) / Math.hypot(a, b);
+        const d = Math.cos(Math.PI * 2 * (a * x + b * y) / N + ph) / Math.pow(Math.hypot(a, b), 1.3);
         nx -= d * a; ny -= d * b;
       }
       const inv = 1 / Math.hypot(nx, ny, 2.2), i = (y * N + x) * 4;
@@ -170,9 +310,11 @@
     ctx.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(30, 30);
+    t.anisotropy = 8;
     return t;
   })();
+  const RIPPLE = 3.2; // ripple tiles per 10 m
+  rippleTex.repeat.set(RIPPLE, RIPPLE);
   // what the water mirrors: a small sky gradient (zenith, horizon, below) turned into an environment map
   const pmrem = new THREE.PMREMGenerator(renderer);
   const skyEnv = (zenith, horizon, below) => {
@@ -188,14 +330,34 @@
     t.dispose();
     return env;
   };
-  const SKY_ENV = { day: skyEnv('#3f86d6', '#eef4f6', '#1d4250'), night: skyEnv('#04060d', '#22335c', '#050a10') };
+  const SKY_ENV = { day: skyEnv('#4f78a6', '#9fb1bd', '#173a46'), night: skyEnv('#04060d', '#1d2b4c', '#050a10') };
   const waterMat = new THREE.MeshStandardMaterial({
-    roughness: 0.12, metalness: 0, vertexColors: true,
-    normalMap: rippleTex, normalScale: new THREE.Vector2(0.4, 0.4),
+    roughness: 0.16, metalness: 0,
+    normalMap: rippleTex, normalScale: new THREE.Vector2(0.22, 0.22),
   });
+  waterMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uDist: U.dist, uTime: U.time, uAmp: U.amp, uDeep: U.deep, uShallow: U.shallow, uFoam: U.foam });
+    sh.vertexShader = 'uniform float uDist; uniform float uTime; uniform float uAmp; varying float vH; varying float vPinch;\n' + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        vec4 wp0 = modelMatrix * vec4(position, 1.0);
+        vec2 P = vec2(wp0.x, uDist - wp0.z);
+        float h = 0.0, hx = 0.0, hs = 0.0, pinch = 0.0, a, ph, c, sn; vec2 k, dP = vec2(0.0);
+        ${WAVE_GLSL}
+        vec3 objectNormal = normalize(vec3(-hx, 1.0 - pinch, hs));
+        vH = h / (${f6(AMP_SUM)} * uAmp + 0.001); vPinch = pinch;`)
+      .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x + dP.x, h, position.z - dP.y);');
+    sh.fragmentShader = 'uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFoam; varying float vH; varying float vPinch;\n' + sh.fragmentShader
+      .replace('#include <color_fragment>', `
+        // light passing through the thin top of a crest turns it green-blue
+        diffuseColor.rgb = mix(uDeep, uShallow, smoothstep(0.1, 0.9, vH));
+        float brk = texture2D(normalMap, vUv * 2.7).r - 0.5;
+        float foam = smoothstep(0.2, 0.4, vPinch + brk * 0.2) * smoothstep(0.2, 0.7, vH);
+        diffuseColor.rgb = mix(diffuseColor.rgb, uFoam, foam * 0.8);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.85, foam);');
+  };
   const water = new THREE.Mesh(waterGeo, waterMat);
-  water.position.z = 20 - WSIZE / 2;
   water.receiveShadow = true;
+  water.frustumCulled = false;
   water.visible = false;
   scene.add(water);
 
@@ -296,26 +458,26 @@
      fixed = no random scale; float = rides the waves; across = lies across the heading. ----- */
   const CLASSES = {
     /* --- air: farmland --- */
-    pine: { label: 'PINE', w: 2.1, h: 8.1, n: 44, build(t) {
+    pine: { label: 'PINE', w: 2.1, h: 8.1, build(t) {
       part(t, geo.pineTrunk, mats.bark, 0, 2, 0);
       const a = pick(mats.pine), b = pick(mats.pine);
       geo.tiers.forEach(({ g, y }, i) => { part(t, g, i % 2 ? a : b, 0, y, 0).rotation.y = rand(0, 6); });
     } },
-    tree: { label: 'TREE', w: 3.0, h: 7.2, n: 16, build(t) {
+    tree: { label: 'TREE', w: 3.0, h: 7.2, build(t) {
       part(t, geo.oakTrunk, mats.bark, 0, 1.7, 0);
       part(t, geo.branch, mats.bark, 0.6, 3.6, 0).rotation.z = -0.7;
       part(t, geo.branch, mats.bark, -0.6, 3.7, 0.2).rotation.z = 0.7;
       [[0, 5, 0, 1], [1.3, 4.4, 0.3, 0.75], [-1.2, 4.5, -0.4, 0.8], [0.2, 4.3, 1.2, 0.7], [-0.3, 4.6, -1.2, 0.7], [0, 6, 0, 0.7]]
         .forEach(([x, y, z, s], i) => { part(t, geo.crowns[i % 3], mats.leaf[i % 3], x, y, z, s, s, s).rotation.y = rand(0, 6); });
     } },
-    rock: { label: 'ROCK', w: 1.3, h: 1.0, n: 16, low: true, build(t) {
+    rock: { label: 'ROCK', w: 1.3, h: 1.0, low: true, build(t) {
       part(t, pick(geo.rocks), mats.rock, 0, 0.35, 0, 1.3, 0.75, 1);
       part(t, pick(geo.rocks), mats.rock, 0.9, 0.15, 0.4, 0.45, 0.45, 0.45);
     } },
-    hay: { label: 'HAY BALE', w: 0.9, h: 1.4, n: 14, low: true, fixed: true, build(t) {
+    hay: { label: 'HAY BALE', w: 0.9, h: 1.4, low: true, fixed: true, build(t) {
       part(t, geo.bale, mats.hay, 0, 0.7, 0);
     } },
-    mast: { label: 'PYLON', w: 3.0, h: 18.4, n: 3, fixed: true, build(t) {
+    mast: { label: 'PYLON', w: 3.0, h: 18.4, fixed: true, build(t) {
       part(t, geo.lattice, mats.lattice, 0, 9, 0);
       [13.5, 16].forEach((y) => {
         part(t, geo.arm, mats.steel, 0, y, 0);
@@ -324,7 +486,7 @@
       });
       part(t, geo.beacon, mats.beacon, 0, 18.2, 0).add(glow(0xff3030, 3));
     } },
-    house: { label: 'FARMHOUSE', w: 3.9, h: 4.8, n: 4, far: true, fixed: true, build(t) {
+    house: { label: 'FARMHOUSE', w: 3.9, h: 4.8, far: true, fixed: true, build(t) {
       part(t, geo.box, pick(mats.walls), 0, 1.4, 0, 5.4, 2.8, 4.2);
       roof(t, pick(mats.roofs), 0, 2.8, 5.4, 4.2, 2);
       part(t, geo.box, mats.dark, 1.6, 4.2, -0.6, 0.5, 1.4, 0.5);
@@ -334,7 +496,7 @@
       part(t, geo.box, mats.glass, 2.71, 1.7, 0, 0.08, 1, 1.2);
       part(t, geo.box, mats.glass, -2.71, 1.7, 0, 0.08, 1, 1.2);
     } },
-    barn: { label: 'BARN', w: 5.0, h: 7.2, n: 2, far: true, fixed: true, build(t) {
+    barn: { label: 'BARN', w: 5.0, h: 7.2, far: true, fixed: true, build(t) {
       part(t, geo.box, mats.barn, 0, 2, 0, 7.5, 4, 5.5);
       roof(t, mats.barnRoof, 0, 4, 7.5, 5.5, 3.2);
       part(t, geo.box, mats.trim, 0, 1.6, 2.76, 2.8, 3.2, 0.08);
@@ -342,39 +504,39 @@
       part(t, geo.box, mats.trim, -2.6, 2.4, 2.76, 0.9, 0.9, 0.08);
       part(t, geo.box, mats.trim, 2.6, 2.4, 2.76, 0.9, 0.9, 0.08);
     } },
-    silo: { label: 'SILO', w: 1.8, h: 8.4, n: 2, far: true, fixed: true, build(t) {
+    silo: { label: 'SILO', w: 1.8, h: 8.4, far: true, fixed: true, build(t) {
       part(t, geo.siloBody, mats.silo, 0, 3.5, 0);
       part(t, geo.siloDome, mats.silo, 0, 7, 0);
     } },
-    windmill: { label: 'WINDMILL', w: 5, h: 12, n: 2, far: true, fixed: true, build(t) {
+    windmill: { label: 'WINDMILL', w: 5, h: 12, far: true, fixed: true, build(t) {
       part(t, geo.siloBody, mats.trim, 0, 4.5, 0, 1.2, 1.3, 1.2);
       part(t, geo.box, mats.timber, 0, 9, 1.8, 9, 0.3, 0.1).rotation.z = 0.6;
       part(t, geo.box, mats.timber, 0, 9, 1.8, 0.3, 9, 0.1).rotation.z = 0.6;
     } },
 
     /* --- sea: open water, drifting debris, a port now and then --- */
-    debris: { label: 'DEBRIS', w: 1.5, h: 0.8, n: 14, float: true, sink: 0.35, build(t) {
+    debris: { label: 'DEBRIS', w: 1.5, h: 0.8, float: true, sink: 0.35, build(t) {
       part(t, geo.box, mats.wood, 0, 0.1, 0, 0.9, 0.7, 0.9).rotation.set(0.2, 0.4, 0.15);
       part(t, geo.box, mats.wood, 0.9, 0, 0.5, 1.8, 0.08, 0.3).rotation.y = 0.5;
       part(t, geo.box, mats.boxes[3], -0.7, 0.05, -0.5, 0.5, 0.4, 0.5).rotation.z = 0.3;
     } },
-    log: { label: 'DRIFTWOOD', w: 1.8, h: 0.5, n: 10, float: true, sink: 0.4, build(t) {
+    log: { label: 'DRIFTWOOD', w: 1.8, h: 0.5, float: true, sink: 0.4, build(t) {
       part(t, geo.log, mats.deadwood, 0, 0.05, 0);
       part(t, geo.branch, mats.deadwood, 0.6, 0.3, 0.2, 0.7, 0.5, 0.7).rotation.x = 0.9;
     } },
-    barrel: { label: 'BARREL', w: 0.8, h: 0.6, n: 12, float: true, fixed: true, sink: 0.45, build(t) {
+    barrel: { label: 'BARREL', w: 0.8, h: 0.6, float: true, fixed: true, sink: 0.45, build(t) {
       part(t, geo.barrel, mats.rust, 0, 0.08, 0);
     } },
-    buoy: { label: 'BUOY', w: 1.0, h: 2.6, n: 14, float: true, fixed: true, sink: 0.12, build(t) {
+    buoy: { label: 'BUOY', w: 1.0, h: 2.6, float: true, fixed: true, sink: 0.12, build(t) {
       part(t, geo.buoyBody, mats.buoy, 0, 0.35, 0);
       part(t, geo.pole, mats.steel, 0, 1.6, 0, 1, 1.6, 1);
       part(t, geo.beacon, mats.beacon, 0, 2.5, 0).add(glow(0xff3030, 2.4));
     } },
-    container: { label: 'CONTAINER', w: 3.5, h: 1.8, n: 6, float: true, fixed: true, sink: 0.45, build(t) {
+    container: { label: 'CONTAINER', w: 3.5, h: 1.8, float: true, fixed: true, sink: 0.45, build(t) {
       part(t, geo.box, pick(mats.boxes), 0, 0.2, 0, 6.1, 2.6, 2.44).rotation.set(0.1, 0, 0.14);
     } },
     // quay with a gantry crane, stacked containers and a moored ship; the water side faces -x
-    port: { label: 'PORT', w: 25, h: 18, n: 3, far: true, fixed: true, face: true, build(t) {
+    port: { label: 'PORT', w: 25, h: 18, far: true, fixed: true, face: true, build(t) {
       part(t, geo.box, mats.concrete, 9, 0.6, 0, 10, 3, 44);
       for (let z = -20; z <= 20; z += 8) part(t, geo.box, mats.dark, 4.2, 0.2, z, 0.6, 3.4, 0.6); // piles
       [[6, -4], [6, 4], [12, -4], [12, 4]].forEach(([x, z]) => part(t, geo.box, mats.buoy, x, 9, z, 0.5, 14, 0.5));
@@ -398,32 +560,32 @@
       });
     } },
     // Sokol portal crane on the quay; a single one, always on the left (see placeCrane)
-    crane: { label: 'PORT CRANE', w: 10, h: 34, n: 1, far: true, fixed: true, build(t) {
+    crane: { label: 'PORT CRANE', w: 10, h: 34, max: 1, far: true, fixed: true, build(t) {
       [[-4, -4], [-4, 4], [4, -4], [4, 4]].forEach(([x, z]) => part(t, geo.box, mats.hull, x, 4, z, 0.8, 8, 0.8));
       part(t, geo.box, mats.trim, 0, 15, 0, 2, 14, 2);            // tower
       part(t, geo.box, mats.trim, 0, 23, 0, 5, 3, 4);             // cabin
       part(t, geo.box, mats.buoy, 11, 27, 0, 22, 1, 1).rotation.z = 0.35; // jib reaching over the water (+x)
     } },
-    boat: { label: 'BOAT', w: 3.3, h: 4.6, n: 10, float: true, fixed: true, sink: 0.1, build(t) {
+    boat: { label: 'BOAT', w: 3.3, h: 4.6, float: true, fixed: true, sink: 0.1, build(t) {
       part(t, geo.box, mats.hull, 0, 0.5, 0, 2.2, 1.2, 6);
       part(t, geo.box, mats.trim, 0, 1.8, -0.6, 1.6, 1.4, 2);
     } },
-    cargoship: { label: 'CARGO SHIP', w: 16, h: 13, n: 4, far: true, fixed: true, along: true, sink: 0.08, build(t) {
+    cargoship: { label: 'CARGO SHIP', w: 16, h: 13, far: true, fixed: true, along: true, sink: 0.08, build(t) {
       part(t, geo.box, mats.hull, 0, 1.5, 0, 7, 5, 30);
       part(t, geo.box, mats.trim, 0, 6.5, 10, 5.4, 5, 6);
       [-8, -2, 4].forEach((z, i) => part(t, geo.box, mats.boxes[i], 0, 5.3, z, 5.6, 2.6, 5.4));
     } },
-    lighthouse: { label: 'LIGHTHOUSE', w: 4, h: 16, n: 2, far: true, fixed: true, sink: 0.03, build(t) {
+    lighthouse: { label: 'LIGHTHOUSE', w: 4, h: 16, far: true, fixed: true, sink: 0.03, build(t) {
       part(t, geo.siloBody, mats.trim, 0, 7, 0, 1, 2, 1);
       part(t, geo.beacon, mats.beacon, 0, 14.6, 0, 3, 3, 3);
     } },
-    dock: { label: 'PIER', w: 7, h: 2.6, n: 4, far: true, fixed: true, sink: 0.2, build(t) {
+    dock: { label: 'PIER', w: 7, h: 2.6, far: true, fixed: true, sink: 0.2, build(t) {
       part(t, geo.box, mats.timber, 0, 0.9, 0, 3, 0.3, 13);
       [-5, 0, 5].forEach((z) => part(t, geo.box, mats.timber, 1.2, 0.2, z, 0.3, 2, 0.3));
     } },
 
     /* --- ground: fortified field --- */
-    trench: { label: 'TRENCH', w: 5.2, h: 1.2, n: 5, fixed: true, across: true, build(t) {
+    trench: { label: 'TRENCH', w: 5.2, h: 1.2, fixed: true, across: true, build(t) {
       part(t, geo.berm, mats.earth, 0, 0.1, 1.5, 1, 0.7, 1);
       part(t, geo.berm, mats.earth, 0, 0.1, -1.5, 1, 0.6, 1).rotation.y = Math.PI;
       part(t, geo.box, mats.burnt, 0, 0.03, 0, 9, 0.06, 1.8);     // the dug-out floor
@@ -431,7 +593,7 @@
       part(t, geo.box, mats.timber, 0, 0.9, -0.8, 7.6, 0.12, 0.12);
       for (let i = 0; i < 6; i++) part(t, geo.bag, mats.sandbag, -2.6 + i * 1.0, 0.75 + (i % 2) * 0.05, 1.5).rotation.y = rand(-0.2, 0.2);
     } },
-    hedgehog: { label: 'HEDGEHOG', w: 1.4, h: 1.5, n: 16, fixed: true, build(t) {
+    hedgehog: { label: 'HEDGEHOG', w: 1.4, h: 1.5, fixed: true, build(t) {
       const g = new THREE.Group();
       part(g, geo.box, mats.rust, 0, 0, 0, 2.3, 0.16, 0.16);
       part(g, geo.box, mats.rust, 0, 0, 0, 0.16, 2.3, 0.16);
@@ -440,11 +602,11 @@
       g.position.y = 0.75;
       t.add(g);
     } },
-    crater: { label: 'CRATER', w: 2.5, h: 0.6, n: 12, build(t) {
+    crater: { label: 'CRATER', w: 2.5, h: 0.6, build(t) {
       part(t, geo.craterRim, mats.earth, 0, 0.05, 0, 1, 0.6, 1);
       part(t, geo.craterPit, mats.burnt, 0, 0.04, 0);
     } },
-    wreck: { label: 'VEHICLE', w: 3.3, h: 2.4, n: 4, fixed: true, build(t) {
+    wreck: { label: 'VEHICLE', w: 3.3, h: 2.4, fixed: true, build(t) {
       const g = new THREE.Group();
       part(g, geo.box, mats.burnt, 0, 0.95, 0, 2.4, 1.1, 5);
       part(g, geo.box, mats.rust, 0, 1.9, 0.8, 2.2, 0.9, 1.8);
@@ -452,101 +614,96 @@
       g.rotation.z = 0.07;
       t.add(g);
     } },
-    deadtree: { label: 'DEAD TREE', w: 1.7, h: 5.2, n: 14, build(t) {
+    deadtree: { label: 'DEAD TREE', w: 1.7, h: 5.2, build(t) {
       part(t, geo.deadTrunk, mats.deadwood, 0, 2.5, 0).rotation.z = rand(-0.12, 0.12);
       part(t, geo.branch, mats.deadwood, 0.5, 3.4, 0, 0.8, 0.8, 0.8).rotation.z = -0.9;
       part(t, geo.branch, mats.deadwood, -0.4, 2.6, 0.1, 0.7, 0.6, 0.7).rotation.z = 1;
     } },
-    block: { label: 'BARRIER', w: 1.6, h: 1.0, n: 10, fixed: true, build(t) {
+    block: { label: 'BARRIER', w: 1.6, h: 1.0, fixed: true, build(t) {
       part(t, geo.box, mats.concrete, 0, 0.5, 0, 2.4, 1, 1);
       part(t, geo.box, mats.concrete, 0, 1.05, 0, 1.6, 0.1, 0.5);
     } },
-    wire: { label: 'WIRE', w: 3.7, h: 1.3, n: 5, fixed: true, across: true, build(t) {
+    wire: { label: 'WIRE', w: 3.7, h: 1.3, fixed: true, across: true, build(t) {
       [-3, 0, 3].forEach((x) => part(t, geo.box, mats.timber, x, 0.65, 0, 0.1, 1.3, 0.1));
       for (let i = 0; i < 9; i++) part(t, geo.coil, mats.steel, -3 + i * 0.75, 0.55, 0);
     } },
-    dugout: { label: 'DUGOUT', w: 4.8, h: 2.2, n: 3, far: true, fixed: true, build(t) {
+    dugout: { label: 'DUGOUT', w: 4.8, h: 2.2, far: true, fixed: true, build(t) {
       part(t, geo.mound, mats.earth, 0, 0, 0, 1, 0.5, 1);
       part(t, geo.box, mats.timber, 0, 0.7, 3.3, 3, 1.4, 0.3);
       part(t, geo.box, mats.burnt, 0, 0.9, 3.36, 1.7, 0.35, 0.3);
     } },
-    barricade: { label: 'BARRICADE', w: 1.7, h: 1.7, n: 8, fixed: true, across: true, build(t) {
+    barricade: { label: 'BARRICADE', w: 1.7, h: 1.7, fixed: true, across: true, build(t) {
       part(t, geo.box, mats.timber, 0, 0.9, 0, 3, 0.2, 0.2);
       [-1.2, 0, 1.2].forEach((x) => part(t, geo.box, mats.timber, x, 0.8, 0, 0.16, 1.6, 0.16).rotation.x = 0.5);
     } },
-    shelter: { label: 'SHELTER', w: 3.2, h: 3.2, n: 4, far: true, fixed: true, build(t) {
+    shelter: { label: 'SHELTER', w: 3.2, h: 3.2, far: true, fixed: true, build(t) {
       part(t, geo.gable, mats.sandbag, 0, 1, 0, 4, 2, 2.6);
     } },
-    supply: { label: 'SUPPLY CRATE', w: 1.1, h: 1.1, n: 10, fixed: true, build(t) {
+    supply: { label: 'SUPPLY CRATE', w: 1.1, h: 1.1, fixed: true, build(t) {
       part(t, geo.box, mats.wood, 0, 0.5, 0, 1.2, 1, 1.2);
     } },
-    sandbags: { label: 'SANDBAGS', w: 2.6, h: 1.2, n: 8, fixed: true, across: true, build(t) {
+    sandbags: { label: 'SANDBAGS', w: 2.6, h: 1.2, fixed: true, across: true, build(t) {
       for (let i = 0; i < 10; i++) part(t, geo.bag, mats.sandbag, -2 + (i % 5) * 1.0 + (i > 4 ? 0.5 : 0), i > 4 ? 0.48 : 0.16, 0);
     } },
   };
 
-  /* ----- environments: what each platform meets, and how it moves ----- */
+  /* ----- environments: what each platform meets, and how it moves.
+     band = half-width of the strip that is filled with objects (around the route);
+     limit = how far the route may wander sideways; slope = steepest sideways drift (dx/ds);
+     seg = length of one planning step; scatter = [class, square metres per object];
+     alts = drone altitude above ground [lowest, highest cruise, highest climb], climb = steepest dy/ds;
+     overfly = clearance needed to pass over an object instead of around it. ----- */
   const ENV = {
     air: {
-      alt: 2.9, speed: 17, margin: 1.8, limit: 12, field: 30, straight: [18, 38],
-      len: (delta) => clamp(delta * 9, 45, 75),
-      blockers: ['pine', 'pine', 'pine', 'tree', 'tree', 'mast'],
-      scatter: [['pine', 6], ['tree', 18], ['rock', 16], ['hay', 20]],
+      speed: 17, margin: 1.8, band: 85, limit: 70, slope: 0.6, seg: [26, 40], relief: 3,
+      alts: [2.6, 7, 15], climb: 0.4, overfly: 1.5,
+      scatter: [['pine', 330], ['tree', 900], ['rock', 900], ['hay', 1000]],
       extras(s0, s1) {
-        if (Math.random() < 0.45) {
-          scatter('house', s0, s1);
-          if (Math.random() < 0.6) scatter('barn', s0, s1);
-          if (Math.random() < 0.5) scatter('silo', s0, s1);
-        }
-        if (Math.random() < 0.15) scatter('mast', s0, s1);
-        if (Math.random() < 0.2) scatter('windmill', s0, s1);
-        if (freeFields.length && Math.random() < 0.7) {
-          const f = freeFields.pop(), side = Math.random() < 0.5 ? -1 : 1;
-          f.scale.set(rand(18, 38), 1, (s1 - s0) * rand(0.8, 1.3));
-          f.userData.s = (s0 + s1) / 2;
-          f.position.x = side * rand(24, 46);
-          f.material.color.set(pick(CROPS));
-          f.visible = true;
+        for (let k = 0; k < 2; k++) {
+          if (Math.random() < 0.4) {
+            scatter('house', s0, s1);
+            if (Math.random() < 0.6) scatter('barn', s0, s1);
+            if (Math.random() < 0.5) scatter('silo', s0, s1);
+          }
+          if (Math.random() < 0.12) scatter('mast', s0, s1);
+          if (Math.random() < 0.15) scatter('windmill', s0, s1);
+          if (freeFields.length && Math.random() < 0.75) placeField(s0, s1);
         }
       },
     },
     sea: {
-      alt: 1.7, speed: 10, margin: 1.6, limit: 13, field: 34, straight: [14, 30],
-      len: (delta) => clamp(delta * 7, 30, 55),
+      alt: 1.7, speed: 10, margin: 1.6, band: 85, limit: 70, slope: 0.45, seg: [24, 36], relief: 0,
       // two locations: open water with a heavy swell, and the sheltered approach to a port
       locs: {
         open: {
           amp: 1,
-          blockers: ['debris', 'log', 'container', 'barrel', 'boat', 'debris'],
-          scatter: [['debris', 20], ['log', 30], ['barrel', 26], ['buoy', 60], ['boat', 80]],
+          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['buoy', 2600], ['boat', 2400], ['container', 3200]],
           extras(s0, s1) {
-            if (Math.random() < 0.15) scatter('cargoship', s0, s1);
+            if (Math.random() < 0.25) scatter('cargoship', s0, s1);
             if (Math.random() < 0.12) scatter('lighthouse', s0, s1);
           },
         },
         port: {
           amp: 0.35,
-          blockers: ['boat', 'buoy', 'container', 'boat', 'debris', 'buoy'],
-          scatter: [['buoy', 18], ['boat', 20], ['container', 45], ['debris', 34], ['barrel', 40]],
+          scatter: [['buoy', 1200], ['boat', 1300], ['container', 1900], ['debris', 1700], ['barrel', 1900]],
           extras(s0, s1) {
-            if (Math.random() < 0.6) placeCrane(s0, s1);
+            if (Math.random() < 0.5) placeCrane(s0, s1);
             if (Math.random() < 0.6) scatter('port', s0, s1);
             if (Math.random() < 0.7) scatter('cargoship', s0, s1);
-            if (Math.random() < 0.5) scatter('dock', s0, s1);
-            if (Math.random() < 0.25) scatter('lighthouse', s0, s1);
+            if (Math.random() < 0.6) scatter('dock', s0, s1);
+            if (Math.random() < 0.2) scatter('lighthouse', s0, s1);
           },
         },
       },
     },
     ground: {
-      alt: 1.3, speed: 7, margin: 1.2, limit: 10, field: 26, straight: [10, 22],
-      len: (delta) => clamp(delta * 6, 22, 46),
-      blockers: ['trench', 'hedgehog', 'crater', 'wire', 'wreck', 'block', 'barricade', 'sandbags'],
-      scatter: [['hedgehog', 13], ['crater', 14], ['deadtree', 9], ['block', 24], ['barricade', 26], ['supply', 20], ['sandbags', 24]],
+      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.4, seg: [18, 28], relief: 1.4,
+      scatter: [['hedgehog', 520], ['crater', 600], ['deadtree', 700], ['block', 900], ['barricade', 1000],
+        ['supply', 900], ['sandbags', 1000], ['trench', 2600], ['wire', 2600]],
       extras(s0, s1) {
-        if (Math.random() < 0.3) scatter('dugout', s0, s1);
-        if (Math.random() < 0.4) scatter('shelter', s0, s1);
-        if (Math.random() < 0.25) scatter('wreck', s0, s1);
+        if (Math.random() < 0.4) scatter('dugout', s0, s1);
+        if (Math.random() < 0.5) scatter('shelter', s0, s1);
+        if (Math.random() < 0.35) scatter('wreck', s0, s1);
       },
     },
   };
@@ -556,21 +713,22 @@
   let envName = ENV[window.fnavEnv] ? window.fnavEnv : 'air', cfg = resolve(envName);
 
   const DEPTH = 190;
+  /* Object pools grow on demand: a class gets a new instance whenever all of its existing
+     ones are in use (up to cls.max). Released objects are reused. */
   const objects = [];
-  const free = {};
-  Object.keys(CLASSES).forEach((type) => {
-    free[type] = [];
-    for (let i = 0; i < CLASSES[type].n; i++) {
-      const t = new THREE.Group();
-      t.userData = { type, cls: CLASSES[type] };
-      CLASSES[type].build(t);
-      t.visible = false;
-      free[type].push(t);
-      objects.push(t);
-      scene.add(t);
-    }
-  });
-  const take = (type) => free[type].pop();
+  const free = {}, made = {}, ready = {};
+  Object.keys(CLASSES).forEach((type) => { free[type] = []; made[type] = 0; });
+  function make(type) {
+    const t = new THREE.Group();
+    t.userData = { type, cls: CLASSES[type] };
+    if (ready[type]) t.add(pick(ready[type]).clone()); else CLASSES[type].build(t);
+    t.visible = false;
+    made[type]++;
+    objects.push(t);
+    scene.add(t);
+    return t;
+  }
+  const take = (type) => free[type].pop() || (made[type] < (CLASSES[type].max || 400) ? make(type) : null);
   const release = (o) => { o.visible = false; free[o.userData.type].push(o); };
 
   /* ----- ready-made models (licence files sit next to them in models/): pines and dead
@@ -660,20 +818,21 @@
       if (spec.env !== env || asked[type]) return;
       asked[type] = true;
       Promise.all(spec.files.map(load)).then((scenes) => {
-        const ready = [];
-        scenes.filter(Boolean).forEach((sc) => (spec.set ? split(sc) : [sc]).forEach((n) => ready.push(prepare(n, cls, spec.fit, spec.pivot))));
-        if (!ready.length) return;
+        const list = [];
+        scenes.filter(Boolean).forEach((sc) => (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot))));
+        if (!list.length) return;
+        ready[type] = list; // objects made from now on get a model straight away
         objects.forEach((o) => {
           if (o.userData.type !== type) return;
           while (o.children.length) o.remove(o.children[0]);
-          o.add(pick(ready).clone());
+          o.add(pick(list).clone());
         });
         if (!raf) render();
       });
     });
   })();
 
-  // crop fields beside the route: striped planes in a few crop colours
+  // crop fields: striped patches in a few crop colours, draped over the relief
   const rowTex = (() => {
     const c = document.createElement('canvas');
     c.width = 64; c.height = 8;
@@ -686,121 +845,178 @@
     t.repeat.set(14, 1);
     return t;
   })();
-  const CROPS = [0xc9a94a, 0x5f8f3a, 0x6b4a32, 0xd8c23a, 0x7fa04a];
-  const fieldGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const CROPS = [0xb39a4e, 0x587f3a, 0x5f4632, 0xbfae4a, 0x70904a];
   const fields = [], freeFields = [];
-  for (let i = 0; i < 7; i++) {
-    const f = new THREE.Mesh(fieldGeo, std(0xffffff, { map: rowTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  for (let i = 0; i < 16; i++) {
+    const g = new THREE.PlaneGeometry(1, 1, 10, 20).rotateX(-Math.PI / 2);
+    const f = new THREE.Mesh(g, std(0xffffff, { map: rowTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    f.userData.grid = g.attributes.position.array.slice(); // unit grid, stretched per use
     f.receiveShadow = true;
     f.visible = false;
-    f.position.y = 0.03;
     fields.push(f); freeFields.push(f);
     scene.add(f);
   }
+  function placeField(s0, s1) {
+    const f = freeFields.pop(), sx = rand(18, 38), sz = (s1 - s0) * rand(0.8, 1.3);
+    const s = (s0 + s1) / 2, x = wp[wp.length - 1].x + rand(-cfg.band, cfg.band);
+    const p = f.geometry.attributes.position, grid = f.userData.grid;
+    for (let i = 0; i < p.count; i++) {
+      const gx = grid[i * 3] * sx, gz = grid[i * 3 + 2] * sz;
+      p.setXYZ(i, gx, terrainH(x + gx, s - gz) + 0.06, gz);
+    }
+    p.needsUpdate = true;
+    f.geometry.computeVertexNormals();
+    f.geometry.computeBoundingSphere();
+    Object.assign(f.userData, { s, len: sz });
+    f.position.set(x, 0, dist - s);
+    f.material.color.set(pick(CROPS));
+    f.visible = true;
+  }
 
-  /* ----- route.
-     s = distance along the track. The route is a chain of waypoints {s, x} joined by
-     quintic ease curves, so lateral velocity and acceleration are zero at every joint
-     and the motion is smooth by construction. Each manoeuvre is generated around a
-     "blocker" obstacle standing on the line the platform was following, so the turn has
-     a visible reason. Everything else is placed clear of the route and of each other. ----- */
-  let dist = 0, time = 0, manoeuvreNext = true;
-  const wp = [{ s: -10, x: 0 }, { s: 40, x: 0 }];
-  // order 0 = position, 1 = slope dx/ds, 2 = curvature d2x/ds2
-  function route(s, order) {
+  /* ----- route planning.
+     s = distance along the track. The route is a chain of waypoints {s, x, y} joined by
+     quintic ease curves, so velocity and acceleration are zero at every joint and the
+     motion is smooth by construction (x across, y = altitude above ground for the drone).
+     The world ahead is generated one planning step at a time: first the step is filled
+     with objects across the whole strip, then the planner tries sideways (and, in the
+     air, vertical) targets, cheapest first, and keeps the first one whose curve clears
+     every object. The cost prefers flying straight and drifting towards a goal that
+     changes every few hundred metres, so the route sweeps far left and right. ----- */
+  let dist = 0, time = 0, goal = 0, goalUntil = 0, prefY = 0;
+  const wp = [];
+  const ease = (t) => t * t * t * (10 - 15 * t + 6 * t * t);
+  // order 0 = position, 1 = slope d/ds, 2 = curvature d2/ds2; k = 'x' sideways or 'y' altitude
+  function route(s, order, k = 'x') {
     let i = wp.length - 2;
     while (i > 0 && wp[i].s > s) i--;
-    const a = wp[i], b = wp[i + 1], L = b.s - a.s, d = b.x - a.x;
+    const a = wp[i], b = wp[i + 1], L = b.s - a.s, d = b[k] - a[k];
     const t = clamp((s - a.s) / L, 0, 1);
     if (order === 1) return d * 30 * t * t * (1 - t) * (1 - t) / L;
     if (order === 2) return d * 60 * t * (1 - t) * (1 - 2 * t) / (L * L);
-    return a.x + d * t * t * t * (10 - 15 * t + 6 * t * t);
+    return a[k] + d * ease(t);
   }
   const pathX = (s) => route(s, 0);
+  const pathY = (s) => route(s, 0, 'y');
 
-  // is a footprint of radius w at (x, s) clear of the route, across its whole depth?
-  const clear = (x, s, w) => {
-    for (let ds = -6; ds <= 6; ds += 3) if (Math.abs(x - pathX(s + ds)) < w + cfg.margin) return false;
-    return true;
+  // would a route point (x, altitude y) at s strike object o? A drone may pass over low ones.
+  const hits = (o, x, y, s) => {
+    const u = o.userData;
+    if (!o.visible || Math.hypot(x - o.position.x, s - u.s) >= u.w + cfg.margin) return false;
+    return !(cfg.overfly && y >= u.h + cfg.overfly);
+  };
+  // would an object at (x, s) stand on the route already planned (or its straight continuation)?
+  const onRoute = (x, s, w, h) => {
+    for (let ds = -(w + cfg.margin); ds <= w + cfg.margin; ds += 1) {
+      if (Math.hypot(x - pathX(s + ds), ds) < w + cfg.margin && !(cfg.overfly && pathY(s + ds) >= h + cfg.overfly)) return true;
+    }
+    return false;
   };
   // does it touch anything already standing? (no house inside a tree, no crate inside a pier)
   const overlaps = (x, s, w) => objects.some((o) => o.visible &&
     Math.hypot(x - o.position.x, s - o.userData.s) < w + o.userData.w + 0.8);
 
-  function put(o, x, s, scale, block, side) {
-    const c = o.userData.cls;
+  function put(o, x, s, scale, side) {
+    const c = o.userData.cls, w = c.w * scale;
     o.scale.setScalar(scale);
     o.rotation.set(0, c.face ? (side > 0 ? 0 : Math.PI)
       : c.across ? rand(-0.25, 0.25)
       : c.along ? rand(-0.12, 0.12) + (Math.random() < 0.5 ? 0 : Math.PI)
       : c.far ? rand(-0.5, 0.5) + (Math.random() < 0.5 ? 0 : Math.PI / 2)
       : rand(0, Math.PI * 2), 0);
-    o.position.set(x, 0, dist - s);
-    Object.assign(o.userData, { s, w: c.w * scale, h: c.h * scale, block: !!block, conf: rand(0.84, 0.95), phase: rand(0, 6) });
+    // stand it at the lowest point of its footprint: sunk a little on a slope, never floating
+    let y = terrainH(x, s);
+    if (terrA) for (const [dx, ds] of [[w, 0], [-w, 0], [0, w], [0, -w]]) y = Math.min(y, terrainH(x + dx, s + ds));
+    o.position.set(x, y, dist - s);
+    Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6) });
     o.visible = true;
   }
 
-  function scatter(type, s0, s1) {
+  // place one object anywhere in the strip of [s0, s1]; near the start of the step it must
+  // keep clear of the route that is already fixed there
+  function scatter(type, s0, s1, xOf) {
     const o = take(type);
     if (!o) return;
-    const c = o.userData.cls, scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale;
-    for (let i = 0; i < 16; i++) {
-      const s = rand(s0, s1), px = pathX(s), side = Math.random() < 0.5 ? -1 : 1;
-      const x = c.far ? px + side * (w + cfg.margin + rand(7, 26))        // yards, piers, dugouts sit back
-        : c.low || Math.random() < 0.5 ? rand(-cfg.field, cfg.field)
-        : px + side * (w + cfg.margin + rand(0.3, 5));                    // obstacles flanking the route
-      if (!c.low && !clear(x, s, w)) continue;
+    const c = o.userData.cls, scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale, h = c.h * scale;
+    const cx = wp[wp.length - 1].x;
+    for (let i = 0; i < 12; i++) {
+      const s = rand(s0, s1), x = xOf ? xOf(cx) : cx + rand(-cfg.band, cfg.band);
+      if (s - w - cfg.margin < s0 + 8 && onRoute(x, s, w, h)) continue;
       if (overlaps(x, s, w)) continue;
-      put(o, x, s, scale, false, side);
-      return;
+      put(o, x, s, scale, x > cx ? 1 : -1);
+      return o;
     }
     release(o);
   }
 
   // the port crane stands on the left at mid distance, its jib turned towards the route
   function placeCrane(s0, s1) {
-    const o = take('crane');
-    if (!o) return; // the only one is already in view
-    for (let i = 0; i < 16; i++) {
-      const s = rand(s0, s1), x = pathX(s) - rand(32, 42);
-      if (overlaps(x, s, o.userData.cls.w)) continue;
-      put(o, x, s, 1, false, -1);
-      o.rotation.y = rand(-0.3, 0.3);
-      return;
-    }
-    release(o);
+    const o = scatter('crane', s0, s1, (cx) => cx - rand(30, 45));
+    if (o) o.rotation.y = rand(-0.3, 0.3);
   }
 
   function populate(s0, s1) {
-    const len = s1 - s0;
+    const area = (s1 - s0) * cfg.band * 2;
     cfg.scatter.forEach(([type, per]) => {
-      for (let i = Math.floor(len / per + Math.random()); i > 0; i--) scatter(type, s0, s1);
+      for (let i = Math.floor(area / per + Math.random()); i > 0; i--) scatter(type, s0, s1);
     });
     cfg.extras(s0, s1);
   }
 
-  function extend() {
-    while (wp[wp.length - 1].s < dist + DEPTH) {
-      const a = wp[wp.length - 1];
-      const blocker = manoeuvreNext && (take(pick(cfg.blockers)) || take(cfg.blockers[0]));
-      if (blocker) {
-        const c = blocker.userData.cls, scale = c.fixed ? 1 : rand(0.9, 1.35), w = c.w * scale;
-        // sidestep far enough to clear the blocker, over a distance long enough to stay gentle
-        const delta = (w + cfg.margin) / 0.8 + rand(0.5, 2);
-        let dir = Math.random() < 0.5 ? -1 : 1;
-        if (Math.abs(a.x + dir * delta) > cfg.limit) dir = -dir;
-        const L = cfg.len(delta);
-        wp.push({ s: a.s + L, x: a.x + dir * delta });
-        put(blocker, a.x, a.s + L * rand(0.85, 1), scale, true, dir);
-        populate(a.s, a.s + L);
-      } else {
-        const L = rand(cfg.straight[0], cfg.straight[1]);
-        wp.push({ s: a.s + L, x: a.x });
-        populate(a.s, a.s + L);
-      }
-      manoeuvreNext = !manoeuvreNext;
+  function plan() {
+    const a = wp[wp.length - 1], L = rand(cfg.seg[0], cfg.seg[1]), end = a.s + L;
+    populate(a.s, end);
+    if (a.s > goalUntil) {
+      goal = rand(-cfg.limit, cfg.limit);
+      goalUntil = a.s + rand(100, 260);
+      if (cfg.alts) prefY = rand(cfg.alts[0], cfg.alts[1]);
     }
+    const near = objects.filter((o) => o.visible && o.userData.s > a.s - 15 && o.userData.s < end + 25);
+    // candidate altitudes: stay, cruise, or just high enough to hop over something ahead
+    let ys = [a.y];
+    if (cfg.alts) {
+      const climb = cfg.climb * L / 1.875;
+      ys = [a.y, prefY, cfg.alts[0], ...near.map((o) => o.userData.h + cfg.overfly + 0.4)]
+        .filter((y) => y >= cfg.alts[0] && y <= cfg.alts[2] && Math.abs(y - a.y) <= climb);
+    }
+    const reach = cfg.slope * L / 1.875, cands = [];
+    for (let i = -12; i <= 12; i++) {
+      const x = a.x + reach * i / 12;
+      if (Math.abs(x) > cfg.limit) continue;
+      for (const y of ys) {
+        cands.push({ x, y, cost: Math.abs(x - goal) * 0.4 + Math.abs(x - a.x) * 0.6 + Math.abs(y - prefY) * 1.2 + (y - a.y > 0 ? (y - a.y) * 0.8 : 0) + Math.random() * 0.4 });
+      }
+    }
+    cands.sort((p, q) => p.cost - q.cost);
+    // walk the curve (and 8 m of straight line past its end, where the next step starts)
+    const blocked = (c, clearIt) => {
+      let hit = false;
+      for (let s = a.s; s <= end + 8; s += 1.5) {
+        const e = ease(Math.min(1, (s - a.s) / L)), x = a.x + (c.x - a.x) * e, y = a.y + (c.y - a.y) * e;
+        for (const o of near) {
+          if (!hits(o, x, y, s)) continue;
+          if (!clearIt) return true;
+          release(o); hit = true;
+        }
+      }
+      return hit;
+    };
+    let best = cands.find((c) => !blocked(c));
+    if (!best) { best = { x: a.x, y: a.y }; blocked(best, true); } // boxed in: drop what is in the way
+    wp.push({ s: end, x: best.x, y: best.y });
+  }
+
+  function extend() {
+    while (wp[wp.length - 1].s < dist + DEPTH) plan();
     while (wp.length > 2 && wp[1].s < dist - 10) wp.shift();
+  }
+
+  // start a fresh route from where the camera is
+  function reset() {
+    const x = clamp(camera.position.x, -cfg.limit, cfg.limit), y = cfg.alts ? cfg.alts[0] + 1 : 0;
+    wp.length = 0;
+    wp.push({ s: dist - 10, x, y }, { s: dist + 16, x, y });
+    goal = x; goalUntil = dist + rand(40, 120); prefY = y;
+    extend();
   }
 
   /* ----- drifting particles: fireflies at night, pollen by day, spray at sea ----- */
@@ -816,38 +1032,49 @@
   // scene starts in the site theme, then is switched by its own control
   let colors = {}, day = root.dataset.theme === 'light', paused = reduced;
   let speed = cfg.speed, last = 0, raf = 0, visible = false;
-  let vx = 0, ax = 0, roll = 0, W = 1, H = 1, tracked = 0;
-  const GROUND = { air: [0x7f8f63, 0x26302a], ground: [0x6e5f47, 0x231e18] };
+  let vx = 0, ax = 0, roll = 0, agl = 0, W = 1, H = 1, tracked = 0;
+  // ground colour by day / night, and the tint of dry patches
+  const GROUND = { air: [0x58693a, 0x232c26, [1.14, 1.05, 0.76]], ground: [0x5c4f3c, 0x211c17, [1.15, 1.02, 0.85]] };
   function applyLook() {
     const sea = envName === 'sea';
-    const horizon = day ? (sea ? 0xc3dbe6 : 0xcfdfea) : 0x16203a;
-    skyMat.uniforms.top.value.set(day ? 0x3f86d6 : 0x04060d);
+    // a hazy, slightly desaturated day rather than a postcard blue
+    const horizon = day ? (sea ? 0xaebfc9 : 0xb3c1c8) : 0x131b30;
+    skyMat.uniforms.top.value.set(day ? 0x3f6c9e : 0x03050b);
     skyMat.uniforms.bottom.value.set(horizon);
+    skyMat.uniforms.glowCol.value.set(day ? 0xffd6a0 : 0x141a2c);
+    skyMat.uniforms.glowDir.value.copy(SKY_POS).normalize();
     scene.fog.color.set(horizon);
-    scene.fog.density = day ? 0.011 : 0.016;
-    renderer.toneMappingExposure = day ? 1.0 : 1.25;
-    hemi.color.set(day ? 0xffffff : 0x7f95ff);
-    hemi.groundColor.set(day ? 0x7c8468 : 0x07090d);
-    hemi.intensity = day ? 0.85 : 0.45;
-    sun.color.set(day ? 0xfff0d2 : 0xa9bcff);
-    sun.intensity = day ? 1.5 : 0.55;
+    scene.fog.density = day ? 0.0095 : 0.015;
+    renderer.toneMappingExposure = day ? 0.8 : 1.2;
+    hemi.color.set(day ? 0xc4d4e6 : 0x6c80d0);
+    hemi.groundColor.set(day ? (sea ? 0x3a4a50 : 0x5a5644) : 0x07090d);
+    hemi.intensity = day ? 0.6 : 0.42;
+    sun.color.set(day ? 0xffe4c0 : 0xb4c4ff);
+    sun.intensity = day ? 1.3 : 0.5;
+    lightDir = LIGHT[day ? 'day' : 'night'];
     head.intensity = day ? 0 : 1.7;
     mats.glass.emissiveIntensity = day ? 0 : 1.3;
     ground.visible = !sea;
     water.visible = sea;
-    ridge.visible = !sea;                       // open horizon at sea
-    if (!sea) groundMat.color.set(GROUND[envName][day ? 0 : 1]);
-    waterMat.color.set(day ? 0x1d5a6c : 0x0a222c);
+    if (!sea) {
+      const [d, n, dry] = GROUND[envName];
+      groundMat.color.set(day ? d : n);
+      U.dry.value.set(...dry);
+    }
+    waterMat.color.set(0xffffff);
+    U.deep.value.set(day ? 0x082636 : 0x020b12);
+    U.shallow.value.set(day ? 0x1b5d68 : 0x082630);
+    U.foam.value.set(day ? 0xd8e2e4 : 0x5d6c78);
     waterMat.envMap = SKY_ENV[day ? 'day' : 'night'];
-    waterMat.envMapIntensity = day ? 1 : 0.7;
+    waterMat.envMapIntensity = day ? 0.65 : 0.8;
     waterMat.needsUpdate = true;
-    ridgeMat.color.set(day ? 0x9fb3c4 : 0x0c1222);
-    disc.material.color.set(day ? 0xfff0c0 : 0xe6ecff);
-    halo.material.color.set(day ? 0xffd9a0 : 0x8fa6ff);
-    disc.scale.setScalar(day ? 1.5 : 0.8);
+    disc.visible = day;
+    disc.material.color.set(0xfff6e0);
+    halo.material.color.set(0x5a4630);
+    moon.visible = moonHalo.visible = !day;
     stars.visible = !day;
     dustMat.color.set(day || sea ? 0xffffff : 0xfff0a0);
-    dustMat.opacity = day ? 0.35 : sea ? 0.4 : 0.8;
+    dustMat.opacity = day ? 0.3 : sea ? 0.4 : 0.8;
     modeEl.textContent = day ? 'SOLARNAV' : 'STARNAV';
     altBox.firstChild.textContent = sea ? 'SWELL ' : envName === 'ground' ? 'TILT ' : 'ALT ';
     altBox.lastChild.textContent = envName === 'ground' ? '°' : ' m';
@@ -861,17 +1088,13 @@
   function setEnv(name) {
     if (!ENV[name]) return;
     envName = name; cfg = resolve(name);
-    seaAmp = cfg.amp;
+    seaAmp = U.amp.value = cfg.amp;
+    terrA = U.terrA.value = cfg.relief;
     loadModels(name);
     objects.forEach((o) => { if (o.visible) release(o); });
     fields.forEach((f) => { if (f.visible) { f.visible = false; freeFields.push(f); } });
-    const x = clamp(camera.position.x, -cfg.limit * 0.5, cfg.limit * 0.5);
-    wp.length = 0;
-    wp.push({ s: dist - 10, x }, { s: dist + 30, x });
-    manoeuvreNext = true;
     vx = ax = roll = 0;
-    populate(dist + 20, dist + 30);
-    extend();
+    reset();
     applyLook();
   }
   document.addEventListener('envchange', (e) => setEnv(e.detail));
@@ -883,29 +1106,35 @@
   /* ----- motion ----- */
   // place the camera for the current distance; each platform moves in its own way
   function pose() {
-    const x = pathX(dist);
+    const x = pathX(dist), gy = terrainH(x, dist);
     vx = route(dist, 1) * speed;
     ax = route(dist, 2) * speed * speed;
-    let y = cfg.alt, pitch = 0, tilt = 0, down = 0.3;
+    let y = gy + (cfg.alt || 0), pitch = 0, tilt = 0, down = 0.3, look = 0;
     if (envName === 'air') {
-      y += Math.sin(time * 0.4) * 0.12;
+      agl = pathY(dist) + Math.sin(time * 0.4) * 0.12;
+      y = gy + agl;
+      look = route(dist, 1, 'y') * 30 * 0.7;               // eyes follow the climb or the descent
       tilt = -Math.atan(ax / 9.81);                        // banks into the turn
+      down = 0.3 + agl * 0.04;                             // looks further down from higher up
     } else if (envName === 'sea') {
       y += wave(x, dist, time);                            // heaves, pitches and rolls with the swell
       pitch = Math.atan((wave(x, dist + 1.5, time) - wave(x, dist - 1.5, time)) / 3) * 0.7;
       tilt = Math.atan((wave(x + 1, dist, time) - wave(x - 1, dist, time)) / 2) * 0.7 + Math.atan(ax / 9.81) * 0.3;
       down = 0.12;
+      agl = Math.abs(y - cfg.alt);
     } else {
       y += Math.sin(dist * 1.3) * 0.03 + Math.sin(dist * 3.1) * 0.015; // rough ground under the wheels
-      pitch = Math.sin(dist * 1.7) * 0.012;
-      tilt = Math.sin(dist * 0.9) * 0.015 + Math.sin(dist * 2.3) * 0.008;
+      // the hull follows the slope of the ground it is on
+      pitch = Math.atan((terrainH(x, dist + 2) - terrainH(x, dist - 2)) / 4) + Math.sin(dist * 1.7) * 0.012;
+      tilt = Math.atan((terrainH(x + 1.2, dist) - terrainH(x - 1.2, dist)) / 2.4) + Math.sin(dist * 0.9) * 0.015 + Math.sin(dist * 2.3) * 0.008;
       down = 0.08;
     }
     roll += (tilt - roll) * 0.08;
     camera.position.set(x, y, 0);
-    camera.lookAt(x + vx / speed * 30, y - down, -30);
+    camera.lookAt(x + vx / speed * 30, y - down + look, -30);
     camera.rotateX(pitch);
     camera.rotateZ(roll);
+    if (envName === 'ground') agl = Math.abs(roll * 57.3);
     return y;
   }
 
@@ -914,30 +1143,19 @@
     speed = cfg.speed * (1 + Math.sin(time * 0.12) * 0.08);
     dist += speed * dt;
     extend();
-    const y = pose();
+    const y = pose(), cx = camera.position.x;
     const sea = envName === 'sea';
+    U.dist.value = dist;
+    U.time.value = time;
 
-    groundTex.offset.y += speed * dt / TILE;
+    // the sky, the ground / water sheet and the shadow box travel sideways with the camera
+    skyGroup.position.x = cx;
+    ground.position.x = Math.round(cx / GCELL) * GCELL;
+    sun.target.position.set(cx, y - 3, -30);
+    sun.position.copy(lightDir).multiplyScalar(70).add(sun.target.position);
     if (sea) {
-      // the surface follows the camera sideways in whole cells; heights come from world coordinates
-      const cell = WSIZE / WSEG, p = waterGeo.attributes.position, nrm = waterGeo.attributes.normal, col = waterGeo.attributes.color;
-      water.position.x = Math.round(camera.position.x / cell) * cell;
-      for (let i = 0; i < p.count; i++) {
-        const x = p.getX(i) + water.position.x, s = dist - (p.getZ(i) + water.position.z);
-        let h = 0, hx = 0, hs = 0; // height and its slopes across / along
-        for (const q of WAVES) {
-          const ph = q.kx * x + q.ks * s + q.w * time + q.ph, c = q.a * Math.cos(ph);
-          h += q.a * Math.sin(ph); hx += c * q.kx; hs += c * q.ks;
-        }
-        h *= seaAmp; hx *= seaAmp; hs *= seaAmp;
-        const inv = 1 / Math.hypot(hx, 1, hs);
-        p.setY(i, h);
-        nrm.setXYZ(i, -hx * inv, inv, hs * inv);   // exact normal -> smooth highlights
-        const c = 0.82 + clamp(h, -0.4, 0.9) * 0.4;  // crests catch more light than troughs
-        col.setXYZ(i, c, c, c);
-      }
-      p.needsUpdate = nrm.needsUpdate = col.needsUpdate = true;
-      rippleTex.offset.set(time * 0.02 + water.position.x / 10, dist / 10 + time * 0.03);
+      water.position.x = Math.round(cx);
+      rippleTex.offset.set(time * 0.02 + water.position.x / 10 * RIPPLE, dist / 10 * RIPPLE + time * 0.03);
     }
     for (const o of objects) {
       if (!o.visible) continue;
@@ -948,24 +1166,26 @@
         o.rotation.x = Math.sin(time * 0.9 + u.phase) * 0.12;
         o.rotation.z = Math.cos(time * 0.7 + u.phase) * 0.12;
       }
-      if (o.position.z > 8 + (u.cls.far ? u.w : 0)) release(o);
+      if (o.position.z > 8 + u.w) release(o);
     }
     for (const f of fields) {
       if (!f.visible) continue;
       f.position.z = dist - f.userData.s;
-      if (f.position.z - f.scale.z / 2 > 8) { f.visible = false; freeFields.push(f); }
+      if (f.position.z - f.userData.len / 2 > 8) { f.visible = false; freeFields.push(f); }
     }
     for (let i = 0; i < DUST; i++) {
       dustPos[i * 3 + 2] += speed * dt;
       dustPos[i * 3] += Math.sin(time + i) * dt * 0.3;
-      if (dustPos[i * 3 + 2] > 5) { dustPos[i * 3 + 2] -= 95; dustPos[i * 3] = camera.position.x + rand(-30, 30); }
+      if (dustPos[i * 3 + 2] > 5) {
+        dustPos[i * 3 + 2] -= 95;
+        dustPos[i * 3] = cx + rand(-30, 30);
+        dustPos[i * 3 + 1] = Math.max(y + rand(-5, 6), 0.3);
+      }
     }
     dustGeo.attributes.position.needsUpdate = true;
 
     spdEl.textContent = Math.round(speed * 3.6);
-    altEl.textContent = sea ? Math.abs(y - cfg.alt).toFixed(1)
-      : envName === 'ground' ? Math.abs(roll * 57.3).toFixed(1)
-      : y.toFixed(1);
+    altEl.textContent = agl.toFixed(1);
     distEl.textContent = Math.floor(dist);
     objEl.textContent = tracked;
   }
@@ -987,7 +1207,7 @@
     const refs = day ? [disc.position] : navStars;
     h2.strokeStyle = h2.fillStyle = colors.accent;
     refs.forEach((p, i) => {
-      const s = toScreen(p.x, p.y, p.z);
+      const s = toScreen(p.x + skyGroup.position.x, p.y, p.z);
       if (!s || s[0] < 0 || s[0] > W || s[1] < 0 || s[1] > H) return;
       h2.globalAlpha = 0.22 + 0.1 * Math.sin(time * 2 + i);
       h2.beginPath(); h2.moveTo(cx, cy); h2.lineTo(s[0], s[1]); h2.stroke();
@@ -1005,7 +1225,7 @@
     let pen = false;
     for (let d = 4; d <= 90; d += 3) {
       const x = pathX(dist + d);
-      const s = toScreen(x, sea ? wave(x, dist + d, time) + 0.15 : 0.05, -d);
+      const s = toScreen(x, sea ? wave(x, dist + d, time) + 0.15 : terrainH(x, dist + d) + 0.05, -d);
       if (!s) continue;
       if (pen) h2.lineTo(s[0], s[1]); else { h2.moveTo(s[0], s[1]); pen = true; }
     }
@@ -1025,10 +1245,12 @@
       const y0 = Math.max(Math.min(a[1], b[1]), -20), y1 = Math.max(a[1], b[1]);
       if (x1 < 0 || x0 > W) continue;
       tracked++;
-      // a threat is anything the route had to bend around, or that stands right beside it
-      const threat = !u.cls.low && (u.block || Math.abs(o.position.x - pathX(u.s)) < u.w + cfg.margin + 2.5);
+      // over = the drone passes above it; threat = the route had to bend around it, or it stands right beside it
+      const lat = Math.abs(o.position.x - pathX(u.s));
+      const over = !!cfg.overfly && lat < u.w + cfg.margin && pathY(u.s) >= u.h + cfg.overfly;
+      const threat = !over && lat < u.w + cfg.margin + 2.5;
       const col = threat ? colors.accent : colors.ink;
-      h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat ? 1 : 0.6);
+      h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
       h2.strokeStyle = h2.fillStyle = col;
       h2.lineWidth = threat ? 1.5 : 1;
       // corner brackets
@@ -1038,9 +1260,9 @@
         h2.moveTo(x + sx * c, y); h2.lineTo(x, y); h2.lineTo(x, y + sy * c);
       });
       h2.stroke();
-      if (x1 - x0 > 26) {
+      if (x1 - x0 > 26 && (threat || over || (d < 45 && x1 - x0 > 40))) { // text only where it matters, or the view drowns in labels
         const conf = Math.min(0.99, u.conf + (1 - d / 95) * 0.08);
-        const action = u.cls.low ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
+        const action = over ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
         h2.fillText(`${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, Math.max(4, x0), Math.max(12, y0 - 16));
         h2.fillText(action, Math.max(4, x0), Math.max(24, y0 - 5));
       }
@@ -1098,8 +1320,9 @@
   modeBtn.addEventListener('click', () => { day = !day; syncUi(); applyLook(); });
   syncUi();
 
-  seaAmp = cfg.amp;
+  seaAmp = U.amp.value = cfg.amp;
+  terrA = U.terrA.value = cfg.relief;
   loadModels(envName);
-  extend();
+  reset();
   applyLook();
 })();
