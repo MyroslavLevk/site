@@ -21,8 +21,20 @@
     el('hint').textContent = 'WebGL is not available on this device';
     return;
   }
-  const DPR = Math.min(devicePixelRatio || 1, 1.75);
-  renderer.setPixelRatio(DPR);
+  const DPR = Math.min(devicePixelRatio || 1, 1.75); // HUD canvas; the 3D view follows the quality level
+  /* Quality levels. Phones and weak machines start lower; while the demo runs, the frame
+     rate is measured and the level is stepped down (never up) if it stays low.
+     dpr = render resolution cap, shadow = shadow map size (0 = none), density = share of
+     scattered objects, litter = share of battlefield litter, fine = dense ground / water grids. */
+  const QUALITY = [
+    { dpr: 1, shadow: 0, density: 0.45, litter: 0.35, fine: false },
+    { dpr: 1.25, shadow: 1024, density: 0.7, litter: 0.6, fine: false },
+    { dpr: 1.75, shadow: 2048, density: 1, litter: 1, fine: true },
+  ];
+  const phone = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 600;
+  const weak = (navigator.deviceMemory || 8) <= 2 || (navigator.hardwareConcurrency || 8) <= 2;
+  let quality = weak ? 0 : phone ? 1 : 2, Q = QUALITY[quality];
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
@@ -39,8 +51,10 @@
   sun.position.set(-30, 45, 5);
   sun.target.position.set(0, 0, -30);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 140 });
+  // shadows are drawn only close by (the box), far objects are not rendered into the shadow map at all
+  sun.castShadow = Q.shadow > 0;
+  sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
+  Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 140 });
   sun.shadow.bias = -0.0006;
   const head = new THREE.SpotLight(0xfff2d0, 0, 90, 0.55, 0.7, 1.4);
   head.target.position.set(0, -0.15, -10);
@@ -277,15 +291,15 @@
         }`);
   };
   // fine near the camera (craters and bumps need it), coarse towards the horizon
-  const groundGeo = (() => {
-    const g = new THREE.PlaneGeometry(1, 1, 240, 250).rotateX(-Math.PI / 2), p = g.attributes.position;
+  const groundGrid = (nx, nz) => {
+    const g = new THREE.PlaneGeometry(1, 1, nx, nz).rotateX(-Math.PI / 2), p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const u = p.getX(i) * 2, v = 0.5 - p.getZ(i);
       p.setXYZ(i, 360 * (0.3 * u + 0.7 * u * Math.abs(u)), 0, 40 - 520 * (0.22 * v + 0.78 * v * v));
     }
     return g;
-  })();
-  const ground = new THREE.Mesh(groundGeo, groundMat);
+  };
+  const ground = new THREE.Mesh(groundGrid(...(Q.fine ? [240, 250] : [130, 140])), groundMat);
   ground.receiveShadow = true;
   ground.frustumCulled = false;
   scene.add(ground);
@@ -315,8 +329,8 @@
         h += a * sn; hx += a * k.x * c; hs += a * k.y * c;
         dP += ${STEEP.toFixed(2)} * a * normalize(k) * c; pinch += ${STEEP.toFixed(2)} * a * length(k) * sn;`).join('');
   // a grid that is fine near the boat and coarse towards the horizon
-  const waterGeo = (() => {
-    const g = new THREE.PlaneGeometry(1, 1, 200, 220).rotateX(-Math.PI / 2);
+  const waterGrid = (nx, nz) => {
+    const g = new THREE.PlaneGeometry(1, 1, nx, nz).rotateX(-Math.PI / 2);
     const p = g.attributes.position, uv = g.attributes.uv;
     for (let i = 0; i < p.count; i++) {
       const u = p.getX(i) * 2, v = 0.5 - p.getZ(i);
@@ -325,7 +339,7 @@
       uv.setXY(i, x / 10, -z / 10);
     }
     return g;
-  })();
+  };
   // ripples too fine for the mesh: a tileable normal map that drifts over the surface
   const rippleTex = (() => {
     const N = 256, c = document.createElement('canvas');
@@ -392,7 +406,7 @@
         diffuseColor.rgb = mix(diffuseColor.rgb, uFoam, foam * 0.8);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.85, foam);');
   };
-  const water = new THREE.Mesh(waterGeo, waterMat);
+  const water = new THREE.Mesh(waterGrid(...(Q.fine ? [200, 220] : [110, 130])), waterMat);
   water.receiveShadow = true;
   water.frustumCulled = false;
   water.visible = false;
@@ -928,7 +942,7 @@
   scene.add(litter);
   LITTER.forEach((K) => {
     K.mesh = new THREE.InstancedMesh(K.g, K.m, K.n);
-    K.mesh.castShadow = K.mesh.receiveShadow = true;
+    K.mesh.receiveShadow = true;
     K.mesh.frustumCulled = false;
     Object.assign(K, { x: new Float32Array(K.n), s: new Float64Array(K.n), rx: new Float32Array(K.n), ry: new Float32Array(K.n), rz: new Float32Array(K.n), k: new Float32Array(K.n) });
     litter.add(K.mesh);
@@ -1057,7 +1071,7 @@
   }
 
   function populate(s0, s1) {
-    const area = (s1 - s0) * cfg.band * 2;
+    const area = (s1 - s0) * cfg.band * 2 * Q.density;
     cfg.scatter.forEach(([type, per]) => {
       for (let i = Math.floor(area / per + Math.random()); i > 0; i--) scatter(type, s0, s1);
     });
@@ -1196,6 +1210,7 @@
     terrA = U.terrA.value = cfg.relief;
     bumpA = U.bump.value = cfg.bumps || 0;
     craters.forEach((c) => c.set(0, -1e6, 1, 0));
+    fpsWarm = 2.5;
     loadModels(name);
     objects.forEach((o) => { if (o.visible) release(o); });
     fields.forEach((f) => { if (f.visible) { f.visible = false; freeFields.push(f); } });
@@ -1265,7 +1280,7 @@
     skyGroup.position.x = cx;
     ground.position.x = cx;
     if (envName === 'ground') updateLitter();
-    sun.target.position.set(cx, y - 3, -30);
+    sun.target.position.set(cx, y - 3, -28);
     sun.position.copy(lightDir).multiplyScalar(70).add(sun.target.position);
     if (sea) {
       water.position.x = Math.round(cx);
@@ -1398,9 +1413,38 @@
     drawHud();
   }
 
+  function setQuality(level) {
+    const was = Q;
+    quality = level; Q = QUALITY[level];
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
+    renderer.setSize(W, H, false);
+    if (Q.shadow !== was.shadow) {
+      sun.castShadow = Q.shadow > 0;
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
+    }
+    if (Q.fine !== was.fine) {
+      ground.geometry.dispose(); ground.geometry = groundGrid(...(Q.fine ? [240, 250] : [130, 140]));
+      water.geometry.dispose(); water.geometry = waterGrid(...(Q.fine ? [200, 220] : [110, 130]));
+    }
+    LITTER.forEach((K) => { K.mesh.count = Math.round(K.n * Q.litter); K.mesh.castShadow = quality === 2; });
+  }
+  // frame-rate watch: after a warm-up (models and shaders load then), average over 2 s windows
+  let fpsWarm = 2, fpsFrames = 0, fpsTime = 0;
+  function watchFps(raw) {
+    raw = Math.min(raw, 1);                       // the loop is stopped in hidden tabs, so long frames are real
+    if (fpsWarm > 0) { fpsWarm -= raw; return; }
+    fpsFrames++; fpsTime += raw;
+    if (fpsTime < 2) return;
+    const fps = fpsFrames / fpsTime;
+    fpsFrames = fpsTime = 0;
+    if (fps < 40 && quality > 0) { setQuality(quality - 1); fpsWarm = 1.5; }
+  }
+
   function frame(now) {
-    const dt = clamp((now - last) / 1000, 0.001, 0.05);
+    const raw = (now - last) / 1000, dt = clamp(raw, 0.001, 0.05);
     last = now;
+    watchFps(raw);
     update(dt);
     render();
     raf = requestAnimationFrame(frame);
@@ -1434,5 +1478,6 @@
   modeBtn.addEventListener('click', () => { day = !day; syncUi(); applyLook(); });
   syncUi();
 
+  LITTER.forEach((K) => { K.mesh.count = Math.round(K.n * Q.litter); K.mesh.castShadow = quality === 2; });
   setEnv(envName);
 })();
