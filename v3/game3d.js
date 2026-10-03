@@ -765,14 +765,17 @@
 
   const DEPTH = 190;
   /* Object pools grow on demand: a class gets a new instance whenever all of its existing
-     ones are in use (up to cls.max). Released objects are reused. */
+     ones are in use (up to cls.max). Released objects are reused.
+     An object is a lightweight proxy (position, footprint, label) used by the planner and
+     the HUD. Until its class has a loaded model it carries the hand-built placeholder;
+     after that it is drawn through instancing (see bindInst) and stays empty itself. */
   const objects = [];
-  const free = {}, made = {}, ready = {};
+  const free = {}, made = {}, variants = {};
   Object.keys(CLASSES).forEach((type) => { free[type] = []; made[type] = 0; });
   function make(type) {
     const t = new THREE.Group();
     t.userData = { type, cls: CLASSES[type] };
-    if (ready[type]) t.add(pick(ready[type]).clone()); else CLASSES[type].build(t);
+    if (!variants[type]) CLASSES[type].build(t);
     t.visible = false;
     made[type]++;
     objects.push(t);
@@ -780,7 +783,59 @@
     return t;
   }
   const take = (type) => free[type].pop() || (made[type] < (CLASSES[type].max || 400) ? make(type) : null);
-  const release = (o) => { o.visible = false; free[o.userData.type].push(o); };
+  const release = (o) => { unbindInst(o); o.visible = false; free[o.userData.type].push(o); };
+
+  /* ----- instanced drawing. Each loaded model (a "variant") is split into its meshes and
+     every mesh becomes one InstancedMesh, so a hundred pines cost a handful of draw calls
+     instead of hundreds. Instances live under instRoot, which sits at z = dist, so a
+     standing object's matrix is written once when it is placed; only floating ones are
+     rewritten every frame. Slots are kept packed: a freed slot takes the last instance. ----- */
+  const instRoot = new THREE.Group();
+  scene.add(instRoot);
+  const iM = new THREE.Matrix4(), iM2 = new THREE.Matrix4(), iQ = new THREE.Quaternion(), iP = new THREE.Vector3();
+  function growVariant(v, cap) {
+    v.parts.forEach((p) => {
+      const im = new THREE.InstancedMesh(p.m.geometry, p.m.material, cap);
+      im.castShadow = im.receiveShadow = true;
+      if (p.m.customDepthMaterial) im.customDepthMaterial = p.m.customDepthMaterial;
+      im.frustumCulled = false;
+      if (p.im) { im.instanceMatrix.array.set(p.im.instanceMatrix.array); instRoot.remove(p.im); p.im.dispose(); }
+      im.count = v.objs.length;
+      p.im = im;
+      instRoot.add(im);
+    });
+    v.cap = cap;
+  }
+  function makeVariant(holder) {
+    holder.updateMatrixWorld(true);
+    const v = { parts: [], objs: [], cap: 0 };
+    holder.traverse((m) => { if (m.isMesh) v.parts.push({ m, rel: m.matrixWorld.clone(), im: null }); });
+    growVariant(v, 16);
+    return v;
+  }
+  function syncInst(o) {
+    const u = o.userData, v = u.variant;
+    if (!v) return;
+    iM.compose(iP.set(o.position.x, o.position.y, -u.s), iQ.setFromEuler(o.rotation), o.scale);
+    v.parts.forEach((p) => { p.im.setMatrixAt(u.slot, iM2.multiplyMatrices(iM, p.rel)); p.im.instanceMatrix.needsUpdate = true; });
+  }
+  function bindInst(o) {
+    const u = o.userData, vs = variants[u.type];
+    if (!vs || u.variant) return;
+    const v = pick(vs);
+    if (v.objs.length === v.cap) growVariant(v, v.cap * 2);
+    u.variant = v; u.slot = v.objs.length; v.objs.push(o);
+    v.parts.forEach((p) => { p.im.count = v.objs.length; });
+    syncInst(o);
+  }
+  function unbindInst(o) {
+    const u = o.userData, v = u.variant;
+    if (!v) return;
+    const last = v.objs.pop();
+    if (last !== o) { v.objs[u.slot] = last; last.userData.slot = u.slot; syncInst(last); }
+    v.parts.forEach((p) => { p.im.count = v.objs.length; });
+    u.variant = null;
+  }
 
   /* ----- ready-made models (licence files sit next to them in models/): pines and dead
      trees by Quaternius, rocks, boats, buoys, cargo, crates and tents by Kenney, all CC0;
@@ -820,9 +875,19 @@
     sandbags: { env: 'ground', fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
     block: { env: 'ground', fit: 'w', files: ['poly/barrier'] },
   };
+  // hand-built classes are instanced too, from three pre-built variants each
+  // (except those carrying glow sprites, which instancing cannot draw)
+  Object.keys(CLASSES).forEach((type) => {
+    if (MODELS[type]) return;
+    const vs = [0, 1, 2].map(() => { const g = new THREE.Group(); CLASSES[type].build(g); return g; });
+    let sprites = false;
+    vs[0].traverse((m) => { if (m.isSprite) sprites = true; });
+    if (!sprites) variants[type] = vs.map(makeVariant);
+  });
   const loadModels = (() => {
     if (!THREE.GLTFLoader) return () => {};
     const loader = new THREE.GLTFLoader(), bb = new THREE.Box3(), size = new THREE.Vector3(), mid = new THREE.Vector3();
+    if (window.MeshoptDecoder) loader.setMeshoptDecoder(window.MeshoptDecoder); // models are meshopt-compressed, textures WebP
     const asked = {};
     const load = (name) => new Promise((ok) => loader.load('models/' + name + '.glb', (g) => ok(g.scene), undefined, () => ok(null)));
     // pull the individual models out of a set, keeping the transforms of the nodes above them
@@ -872,11 +937,11 @@
         const list = [];
         scenes.filter(Boolean).forEach((sc) => (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot))));
         if (!list.length) return;
-        ready[type] = list; // objects made from now on get a model straight away
+        variants[type] = list.map(makeVariant); // objects made from now on are drawn instanced straight away
         objects.forEach((o) => {
           if (o.userData.type !== type) return;
-          while (o.children.length) o.remove(o.children[0]);
-          o.add(pick(list).clone());
+          while (o.children.length) o.remove(o.children[0]); // drop the placeholder
+          if (o.visible) bindInst(o);
         });
         if (!raf) render();
       });
@@ -1045,6 +1110,7 @@
     o.position.set(x, y, dist - s);
     Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6) });
     o.visible = true;
+    bindInst(o);
   }
 
   // place one object anywhere in the strip of [s0, s1]; near the start of the step it must
@@ -1067,7 +1133,7 @@
   // the port crane stands on the left at mid distance, its jib turned towards the route
   function placeCrane(s0, s1) {
     const o = scatter('crane', s0, s1, (cx) => cx - rand(30, 45));
-    if (o) o.rotation.y = rand(-0.3, 0.3);
+    if (o) { o.rotation.y = rand(-0.3, 0.3); syncInst(o); }
   }
 
   function populate(s0, s1) {
@@ -1279,6 +1345,7 @@
     // the sky, the ground / water sheet and the shadow box travel sideways with the camera
     skyGroup.position.x = cx;
     ground.position.x = cx;
+    instRoot.position.z = dist;
     if (envName === 'ground') updateLitter();
     sun.target.position.set(cx, y - 3, -28);
     sun.position.copy(lightDir).multiplyScalar(70).add(sun.target.position);
@@ -1294,6 +1361,7 @@
         o.position.y = wave(o.position.x, u.s, time);
         o.rotation.x = Math.sin(time * 0.9 + u.phase) * 0.12;
         o.rotation.z = Math.cos(time * 0.7 + u.phase) * 0.12;
+        syncInst(o);
       }
       if (o.position.z > 8 + u.w) release(o);
     }
