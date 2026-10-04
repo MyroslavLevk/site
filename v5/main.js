@@ -148,7 +148,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=12'))
+        .then(() => load('game3d.js?v=13'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

@@ -1,11 +1,6 @@
 Models downloaded from poly.pizza. All are CC0 1.0 (public domain):
 https://creativecommons.org/publicdomain/zero/1.0/
 
-barn.glb            Barn                  by Quaternius    https://poly.pizza/m/vSqQNA7ez6
-big-barn.glb        Big Barn              by Quaternius    https://poly.pizza/m/q1N3xn2SpC
-silo.glb            Silo                  by Quaternius    https://poly.pizza/m/5GhLrv5Ce3
-hay.glb             Hay                   by Quaternius    https://poly.pizza/m/Yu8TOERkpw
-windmill.glb        Tower Windmill        by Quaternius    https://poly.pizza/m/52yaPyaAAG
 pylon.glb           Transmission Tower    by iPoly3D       https://poly.pizza/m/qNRfSh4jBS
 dock.glb            Dock Long             by Quaternius    https://poly.pizza/m/bN9Oz3niNm
 lighthouse.glb      Light House           by MaverickFX    https://poly.pizza/m/KRebJXIRb8
