@@ -1548,7 +1548,7 @@
     h2.setLineDash([6, 6]);
     h2.beginPath();
     let pen = false;
-    for (let d = 4; d <= 90; d += 3) {
+    for (let d = 0.5; d <= 90; d += d < 6 ? 0.5 : 3) { // from right under the camera, so it leaves the bottom edge at any height
       const x = pathX(dist + d);
       const s = toScreen(x, sea ? wave(x, dist + d, time) + 0.15 : terrainH(x, dist + d) + 0.05, -d);
       if (!s) continue;
