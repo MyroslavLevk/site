@@ -98,11 +98,13 @@
       p.set(p.x, p.y * (1 - 0.5 * u) + u * span * dihedral, p.z * (root + (tip - root) * u) + u * 0.1);
     });
     g.add(xray(wing));
-    // tip fins, leaning outwards
+    // tip fins: standing on the very tips, within the tip chord, leaning outwards a little
     [-1, 1].forEach((side) => {
-      const fin = xray(new T.BoxGeometry(0.02, 0.24, 0.17, 1, 3, 2));
-      fin.position.set(side * (span + 0.01), span * dihedral + 0.11, 0.17);
-      fin.rotation.set(0.25, 0, -side * 0.18);
+      const fin = xray(warp(new T.BoxGeometry(0.02, 0.22, 0.2, 1, 3, 2), (p) => {
+        p.z += (p.y + 0.11) * 0.35;                       // swept back towards the top
+        p.x += side * (p.y + 0.11) * 0.15;                // leaning outwards
+      }));
+      fin.position.set(side * (span - 0.01), span * dihedral + 0.11, 0.1);
       g.add(fin);
     });
     // pod: a lathed fuselage sitting on the wing centre, the wing passes through it
@@ -111,7 +113,7 @@
     const podGeo = new T.LatheGeometry(prof, 14).rotateX(Math.PI / 2);
     podGeo.scale(1.25, 0.95, 1);
     g.add(at(xray(podGeo), 0, 0.03, 0.02));
-    g.add(at(xray(new T.SphereGeometry(0.045, 10, 6), false), 0, -0.04, -0.4));   // nose camera
+    g.add(at(xray(new T.SphereGeometry(0.04, 10, 6), false), 0, 0.0, -0.36));   // nose camera, set into the pod
     g.add(at(xray(new T.CylinderGeometry(0.035, 0.045, 0.08, 10).rotateX(Math.PI / 2), false), 0, 0.03, 0.4));
     g.add(at(new T.LineSegments(new T.EdgesGeometry(new T.CircleGeometry(0.17, 28)), M.wire), 0, 0.03, 0.45));
     const blade = at(xray(new T.BoxGeometry(0.34, 0.012, 0.03), false), 0, 0.03, 0.45);
