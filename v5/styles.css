@@ -1346,3 +1346,31 @@ a.hcard__foot:hover { color: var(--accent); }
 .xray__dots i.is-on { width: 18px; border-radius: 3px; background: var(--accent); }
 .xray[data-models~="usv"] { cursor: grab; touch-action: pan-y; }
 @media (max-width: 600px) { .xray__name { min-width: 0; } }
+
+/* ---------- contact page: the form (opens a pre-filled email, see main.js) and the facts beside it ---------- */
+.cform { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 20px; padding: clamp(24px, 3vw, 40px); border: 1px solid var(--line-2); border-radius: 20px; transition: border-color .3s; }
+.cform:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
+.cform label { display: grid; gap: 8px; }
+.cform__wide { grid-column: 1 / -1; }
+.cform input, .cform textarea {
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color .3s;
+}
+.cform input:focus, .cform textarea:focus { border-color: var(--accent); }
+.cform label:focus-within .mono { color: var(--accent); }
+.cform .btn { justify-self: start; border: 0; border-radius: 999px; font-family: inherit; cursor: pointer; }
+.cfacts { display: grid; gap: 0; margin: 0; width: 100%; }
+.cfacts div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.cfacts dd { margin: 0; }
+.cfacts a { transition: color .3s; }
+.cfacts a:hover { color: var(--accent); }
+@media (max-width: 600px) { .cform { grid-template-columns: 1fr; } }

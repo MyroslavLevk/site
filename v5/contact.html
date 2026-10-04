@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body class="v2 v5">
 
@@ -52,14 +52,22 @@
           <li>Where it has to operate</li>
           <li>What you need: testing, integration or deployment</li>
         </ul>
+        <dl class="cfacts">
+          <div><dt class="mono">Email</dt><dd><a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a></dd></div>
+          <div><dt class="mono">Signal</dt><dd>Available on request</dd></div>
+          <div><dt class="mono">Response</dt><dd>We respond within 24h</dd></div>
+        </dl>
         <a class="pbtn" href="index.html#faq"><span>Read the FAQ</span><i aria-hidden="true">→</i></a>
       </div>
-      <div class="ccard reveal">
-        <div><span class="mono">Email</span><a class="ccard__mail" href="mailto:office@fnav-systems.com">office@fnav-systems.com</a></div>
-        <div><span class="mono">Signal</span><p>Available on request</p></div>
-        <div><span class="mono">Response</span><p>We respond within 24h</p></div>
-        <a class="btn btn--sm" href="mailto:office@fnav-systems.com"><span>Get in touch</span><i aria-hidden="true">→</i></a>
-      </div>
+      <!-- no backend yet: main.js turns the form into a pre-filled email -->
+      <form class="cform reveal" id="contactForm">
+        <label><span class="mono">Name</span><input name="name" autocomplete="name" required></label>
+        <label><span class="mono">Organisation</span><input name="org" autocomplete="organization"></label>
+        <label><span class="mono">Email</span><input name="email" type="email" autocomplete="email" required></label>
+        <label><span class="mono">Subject</span><input name="subject" required></label>
+        <label class="cform__wide"><span class="mono">Message</span><textarea name="message" rows="5" required></textarea></label>
+        <button class="btn btn--sm" type="submit"><span>Send message</span><i aria-hidden="true">→</i></button>
+      </form>
     </div>
   </section>
 </main>
@@ -84,6 +92,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=11" defer></script>
+<script src="main.js?v=12" defer></script>
 </body>
 </html>
