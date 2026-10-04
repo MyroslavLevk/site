@@ -236,9 +236,13 @@
 
   // callouts pinned to the current model's module
   const pins = [...box.querySelectorAll('[data-pin]')];
-  const PIN = { sensor: new T.Vector3(0, 0.78, 0), module: new T.Vector3(-0.1, -0.02, 0.1) };
+  const PIN = { sensor: new T.Vector3(0, 0.78, 0) };
+  const EDGES = [[0, -0.04, 0.13], [0, -0.04, -0.13], [0.1, -0.04, 0], [-0.1, -0.04, 0]].map((a) => new T.Vector3(...a));
   const v = new T.Vector3();
   const lead = box.querySelector('.xray__lead');
+  // a dot on the module where the leader line starts
+  const dot = lead && lead.ownerSVGElement.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'circle'));
+  if (dot) { dot.setAttribute('class', 'xray__dot'); dot.setAttribute('r', '3'); }
   const texts = pins.map((el) => {
     const nodes = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     while (walk.nextNode()) nodes.push({ n: walk.currentNode, s: walk.currentNode.nodeValue });
@@ -279,6 +283,7 @@
       const len = lead.getTotalLength ? lead.getTotalLength() : 0;
       lead.style.strokeDasharray = len;
       lead.style.strokeDashoffset = len * (1 - f(ORDER.lead));
+      if (dot) dot.style.opacity = f(ORDER.lead) > 0 ? 1 : 0;
     }
     return out;
   }
@@ -368,8 +373,6 @@
     const m = list[cur];
     m.g.updateMatrixWorld(true);
     const o = outline(m);
-    const mod = m.module.localToWorld(v.copy(PIN.module)).project(camera);
-    const mx = (mod.x + 1) / 2 * W, my = (1 - mod.y) / 2 * H;
     const sen = m.module.localToWorld(v.set(0, m.sensorY || 0.78, 0)).project(camera);
     const sx = (sen.x + 1) / 2 * W, sy = Math.max((1 - sen.y) / 2 * H, 22);
     const label = box.querySelector('.xray__pin--module i');
@@ -377,8 +380,17 @@
     if (label && texts[pins.findIndex((el) => el.dataset.pin === 'module')].nodes.every((x) => x.n.nodeValue === x.s)) fullW = label.offsetWidth;
     const lw = fullW;
     if (label) label.style.width = lw + 'px'; // fixed box: letters appear left to right
+    // the leader starts from the middle of one of the module's lower edges: the leftmost one
+    // when the label sits to the left, the lowest one when it sits underneath
+    const left = o.x0 - 20 - lw >= 16;
+    let mx = 0, my = 0, best = -Infinity;
+    EDGES.forEach((e) => {
+      m.module.localToWorld(v.copy(e)).project(camera);
+      const x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * H, score = left ? -x : y;
+      if (score > best) { best = score; mx = x; my = y; }
+    });
     let lx, ly, path;
-    if (o.x0 - 20 - lw >= 16) {                 // room on the left: level with the module
+    if (left) {                                // room on the left: level with the module
       lx = o.x0 - 20; ly = Math.min(Math.max(my, o.y0 + 16), H - 28);
       path = `M${mx} ${my}L${lx + 34} ${ly}H${lx + 6}`;
     } else {                                   // otherwise centred under the model
@@ -389,6 +401,7 @@
       const [x, y] = el.dataset.pin === 'sensor' ? [sx, sy] : [lx, ly];
       el.style.transform = `translate(${x}px, ${y}px)`;
     });
+    if (dot) { dot.setAttribute('cx', mx); dot.setAttribute('cy', my); }
     if (lead) {
       lead.setAttribute('d', path);
     }
