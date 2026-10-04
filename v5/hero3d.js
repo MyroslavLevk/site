@@ -22,27 +22,45 @@
   camera.lookAt(0, 0.05, 0);
 
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const wireMat = new T.LineBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false });
-  const edgeMat = new T.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false });
-  const glassMat = new T.MeshBasicMaterial({ transparent: true, opacity: 0.05, depthWrite: false, side: T.DoubleSide });
-  const moduleMat = new T.MeshStandardMaterial({ roughness: 0.55, metalness: 0.2 });
-  const accentMat = new T.MeshBasicMaterial();
-  const accentLine = new T.LineBasicMaterial();
-  const dashMat = new T.LineDashedMaterial({ dashSize: 0.05, gapSize: 0.05, transparent: true, opacity: 0.9 });
+  // every model gets its own material set: during a flip each one is cut by its own clipping plane
+  const sets = [];
+  function makeMats() {
+    const clip = [new T.Plane(new T.Vector3(-1, 0, 0), 99)];
+    const c = { clippingPlanes: clip };
+    const s = {
+      clip,
+      wire: new T.LineBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false, ...c }),
+      edge: new T.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false, ...c }),
+      glass: new T.MeshBasicMaterial({ transparent: true, opacity: 0.05, depthWrite: false, side: T.DoubleSide, ...c }),
+      module: new T.MeshStandardMaterial({ roughness: 0.55, metalness: 0.2, ...c }),
+      accent: new T.MeshBasicMaterial({ ...c }),
+      line: new T.LineBasicMaterial({ ...c }),
+      dash: new T.LineDashedMaterial({ dashSize: 0.05, gapSize: 0.05, transparent: true, opacity: 0.9, ...c }),
+    };
+    sets.push(s);
+    return s;
+  }
+  let M; // the set the builders below draw with
+  // the scanner: a thin orange sheet that sweeps across the scene during a flip
+  const scanFill = new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending });
+  const scanEdge = new T.LineBasicMaterial({ transparent: true, opacity: 0 });
   const applyColors = () => {
     const fg = new T.Color(css('--fg') || '#e9e6d6'), acc = new T.Color(css('--accent') || '#ff5b1f');
-    wireMat.color.copy(fg); edgeMat.color.copy(fg); glassMat.color.copy(fg);
-    moduleMat.color.set(0x23271f); // the module stays dark and solid in both themes
-    accentMat.color.copy(acc); accentLine.color.copy(acc); dashMat.color.copy(acc);
+    sets.forEach((s) => {
+      s.wire.color.copy(fg); s.edge.color.copy(fg); s.glass.color.copy(fg);
+      s.module.color.set(0x23271f); // the module stays dark and solid in both themes
+      s.accent.color.copy(acc); s.line.color.copy(acc); s.dash.color.copy(acc);
+    });
+    scanFill.color.copy(acc); scanEdge.color.copy(acc);
     render();
   };
 
   // a see-through part: faint surface + dense wire + crisp outline
   const xray = (geo, wire = true) => {
     const g = new T.Group();
-    g.add(new T.Mesh(geo, glassMat));
-    if (wire) g.add(new T.LineSegments(new T.WireframeGeometry(geo), wireMat));
-    g.add(new T.LineSegments(new T.EdgesGeometry(geo, 25), edgeMat));
+    g.add(new T.Mesh(geo, M.glass));
+    if (wire) g.add(new T.LineSegments(new T.WireframeGeometry(geo), M.wire));
+    g.add(new T.LineSegments(new T.EdgesGeometry(geo, 25), M.edge));
     return g;
   };
   // reshape a geometry's vertices in place
@@ -57,14 +75,14 @@
   // the FNAV module: solid, with the sky-sensor lens and its view cone
   function makeModule() {
     const m = new T.Group();
-    const body = new T.Mesh(new T.BoxGeometry(0.2, 0.08, 0.26), moduleMat);
+    const body = new T.Mesh(new T.BoxGeometry(0.2, 0.08, 0.26), M.module);
     m.add(body);
-    m.add(new T.LineSegments(new T.EdgesGeometry(body.geometry), accentLine));
-    m.add(at(new T.Mesh(new T.CylinderGeometry(0.05, 0.055, 0.02, 24), accentMat), 0, 0.05, 0));
+    m.add(new T.LineSegments(new T.EdgesGeometry(body.geometry), M.line));
+    m.add(at(new T.Mesh(new T.CylinderGeometry(0.05, 0.055, 0.02, 24), M.accent), 0, 0.05, 0));
     const cone = new T.LineSegments(new T.BufferGeometry().setFromPoints([
       new T.Vector3(-0.03, 0.06, 0), new T.Vector3(-0.32, 0.75, 0),
       new T.Vector3(0.03, 0.06, 0), new T.Vector3(0.32, 0.75, 0),
-    ]), dashMat);
+    ]), M.dash);
     cone.computeLineDistances();
     m.add(cone);
     return m;
@@ -96,7 +114,7 @@
     g.add(at(xray(podGeo), 0, -0.04, 0.02));
     g.add(at(xray(new T.SphereGeometry(0.045, 10, 6), false), 0, -0.09, -0.4));
     g.add(at(xray(new T.CylinderGeometry(0.035, 0.045, 0.08, 10).rotateX(Math.PI / 2), false), 0, -0.02, 0.4));
-    g.add(at(new T.LineSegments(new T.EdgesGeometry(new T.CircleGeometry(0.17, 28)), wireMat), 0, -0.02, 0.45));
+    g.add(at(new T.LineSegments(new T.EdgesGeometry(new T.CircleGeometry(0.17, 28)), M.wire), 0, -0.02, 0.45));
     const blade = at(xray(new T.BoxGeometry(0.34, 0.012, 0.03), false), 0, -0.02, 0.45);
     g.add(blade);
     const module = at(makeModule(), 0, 0.1, -0.04);
@@ -175,9 +193,40 @@
   }
 
   const BUILD = { uav: buildUav, usv: buildUsv, ugv: buildUgv };
-  const list = (box.dataset.models || 'uav').split(/\s+/).filter((k) => BUILD[k]).map((k) => BUILD[k]());
-  list.forEach((m, i) => { m.k = i ? 0 : 1; m.g.visible = !i; scene.add(m.g); });
-  let cur = 0;
+  const list = (box.dataset.models || 'uav').split(/\s+/).filter((k) => BUILD[k]).map((k) => {
+    M = makeMats();
+    const m = BUILD[k]();
+    m.clip = M.clip[0];
+    // the model's outline in its own space, for placing the callouts beside it
+    m.g.updateMatrixWorld(true);
+    m.box = new T.Box3();
+    m.g.children.forEach((c) => { if (c !== m.module) m.box.expandByObject(c); });
+    m.box.expandByObject(m.module.children[0]);
+    m.box.translate(m.g.position.clone().negate());
+    m.g.scale.setScalar(m.size || 1);
+    return m;
+  });
+  list.forEach((m, i) => { m.g.visible = !i; scene.add(m.g); });
+  renderer.localClippingEnabled = true;
+  const glowTex = (() => { // a horizontal fade: clear - solid - clear
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 1;
+    const g = c.getContext('2d'), grd = g.createLinearGradient(0, 0, 64, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.5, 'rgba(255,255,255,1)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 64, 1);
+    return new T.CanvasTexture(c);
+  })();
+  scanFill.map = glowTex;
+  const scan = new T.Group();
+  scan.add(new T.Mesh(new T.PlaneGeometry(0.5, 2.6), scanFill));          // glow band
+  scan.add(new T.LineSegments(new T.BufferGeometry().setFromPoints([new T.Vector3(0, -1.3, 0.01), new T.Vector3(0, 1.3, 0.01)]), scanEdge)); // core
+  scan.position.y = 0.2;
+  scan.visible = false;
+  scene.add(scan);
+  // flip: the sheet sweeps across (dir = +1 left to right, -1 back); the new model shows on the
+  // side it has passed, the old one on the side still ahead of it. p runs 0 -> 1 over FLIP s.
+  const FLIP = 1.2, R = 1.9;
+  let cur = 0, from = -1, dir = 1, p = 1;
 
   scene.add(new T.HemisphereLight(0xffffff, 0x222222, 0.9));
   const key = new T.DirectionalLight(0xffffff, 0.8);
@@ -194,32 +243,32 @@
   const ui = box.closest('figure') || box; // the arrows and dots sit under the canvas
   const nameEl = ui.querySelector('.xray__name');
   const dots = [...ui.querySelectorAll('.xray__dots i')];
-  function show(i) {
-    cur = (i + list.length) % list.length;
+  function show(i, d = 1) {
+    const next = (i + list.length) % list.length;
+    if (next !== cur) { from = cur; cur = next; dir = d; p = reduced ? 1 : 0; }
     if (nameEl) nameEl.textContent = list[cur].name;
-    dots.forEach((d, j) => d.classList.toggle('is-on', j === cur));
-    list.forEach((m, j) => { if (reduced) { m.k = j === cur ? 1 : 0; } m.g.visible = m.k > 0.001 || j === cur; });
+    dots.forEach((dt, j) => dt.classList.toggle('is-on', j === cur));
     if (reduced || !raf) render();
   }
   // left alone, the models flip by themselves every few seconds; a manual flip or the pointer
   // resting on the model holds that off
   const AUTO = 5;
   let idle = 0, hover = false;
-  const byHand = (i) => { idle = -AUTO; show(i); };
+  const byHand = (i, d) => { idle = -AUTO; show(i, d); };
   box.addEventListener('pointerenter', () => { hover = true; });
   box.addEventListener('pointerleave', () => { hover = false; });
-  ui.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => byHand(cur + +b.dataset.step)));
+  ui.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => byHand(cur + +b.dataset.step, +b.dataset.step)));
   if (list.length > 1) {
     let sx = null;
     box.addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) sx = e.clientX; });
     box.addEventListener('pointerup', (e) => {
-      if (sx !== null && Math.abs(e.clientX - sx) > 40) byHand(cur + (e.clientX < sx ? 1 : -1));
+      if (sx !== null && Math.abs(e.clientX - sx) > 40) byHand(cur + (e.clientX < sx ? 1 : -1), e.clientX < sx ? 1 : -1);
       sx = null;
     });
     box.tabIndex = 0;
     box.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight') { e.preventDefault(); byHand(cur + 1); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); byHand(cur - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); byHand(cur + 1, 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); byHand(cur - 1, -1); }
     });
   }
 
@@ -232,47 +281,77 @@
     camera.position.z = W / H < 1.4 ? 3.7 * 1.4 / (W / H) : 3.7;
     camera.updateProjectionMatrix();
   }
-  const ease = (k) => k * k * (3 - 2 * k);
+  const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2); // ease-in-out, cubic
+  const corner = new T.Vector3();
+  function outline(m) { // the model's outline on screen
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? m.box.max.x : m.box.min.x, i & 2 ? m.box.max.y : m.box.min.y, i & 4 ? m.box.max.z : m.box.min.z);
+      m.g.localToWorld(corner).project(camera);
+      const x = (corner.x + 1) / 2 * W, y = (1 - corner.y) / 2 * H;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { x0, x1, y0, y1 };
+  }
   function render() {
+    const e = ease(Math.min(1, p)), flipping = p < 1;
+    const s = dir > 0 ? -R + 2 * R * e : R - 2 * R * e; // where the sheet is
     list.forEach((m, j) => {
+      const isCur = j === cur, isFrom = j === from && flipping;
+      m.g.visible = isCur || isFrom;
       if (!m.g.visible) return;
-      const e = ease(m.k);
-      m.g.scale.setScalar((0.6 + 0.4 * e) * (m.size || 1));
-      m.g.rotation.y = (m.yaw || 0) - 0.55 + (reduced ? 0 : Math.sin(t * 0.25) * 0.45) + (1 - e) * (j === cur ? -1.2 : 1.2);
+      m.g.rotation.y = (m.yaw || 0) - 0.55 + (reduced ? 0 : Math.sin(t * 0.25) * 0.45);
       m.g.rotation.x = 0.08;
       m.g.rotation.z = reduced ? 0 : Math.sin(t * 0.5) * 0.03;
-      m.g.children.forEach((c) => { c.visible = e > 0.02; });
       if (m.spin) m.spin.rotation.z = t * 30;
+      // the new model on the side the sheet has passed, the old one ahead of it
+      const behind = isCur ? dir : -dir;
+      if (!flipping) m.clip.set(corner.set(-1, 0, 0), 99);
+      else m.clip.set(corner.set(-behind, 0, 0), behind * s);
     });
+    scan.visible = flipping;
+    box.classList.toggle('is-flipping', flipping); // callouts hide at once, then fade back in
+    if (flipping) {
+      scan.position.x = s;
+      scan.quaternion.copy(camera.quaternion); // face the viewer
+      const a = Math.min(1, Math.sin(Math.PI * e) * 2.5);
+      scanFill.opacity = 0.35 * a;
+      scanEdge.opacity = a;
+    }
     renderer.render(scene, camera);
-    // callouts: only once the current model has settled
-    const m = list[cur], settled = m.k > 0.95;
+
+    // callouts: once the model has settled, beside its outline so they never cover it
+    const m = list[cur];
     m.g.updateMatrixWorld(true);
-    const pts = {};
+    const o = outline(m);
+    const mod = m.module.localToWorld(v.copy(PIN.module)).project(camera);
+    const mx = (mod.x + 1) / 2 * W, my = (1 - mod.y) / 2 * H;
+    const sen = m.module.localToWorld(v.set(0, m.sensorY || 0.78, 0)).project(camera);
+    const sx = (sen.x + 1) / 2 * W, sy = Math.max((1 - sen.y) / 2 * H, 22);
+    const label = box.querySelector('.xray__pin--module i');
+    const lw = label ? label.offsetWidth : 120;
+    let lx, ly, path;
+    if (o.x0 - 20 - lw >= 0) {                 // room on the left: level with the module
+      lx = o.x0 - 20; ly = Math.min(Math.max(my, o.y0 + 16), H - 28);
+      path = `M${mx} ${my}L${lx + 34} ${ly}H${lx + 6}`;
+    } else {                                   // otherwise centred under the model
+      lx = Math.min(Math.max(mx + lw / 2, lw + 4), W - 4); ly = Math.min(o.y1 + 30, H - 26);
+      path = `M${mx} ${my}V${ly - 18}`;
+    }
     pins.forEach((el) => {
-      v.copy(PIN[el.dataset.pin]);
-      if (el.dataset.pin === 'sensor' && m.sensorY) v.y = m.sensorY;
-      m.module.localToWorld(v).project(camera);
-      const x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * H;
-      pts[el.dataset.pin] = [x, y];
+      const [x, y] = el.dataset.pin === 'sensor' ? [sx, sy] : [lx, ly];
       el.style.transform = `translate(${x}px, ${y}px)`;
-      el.style.visibility = settled ? '' : 'hidden';
     });
     if (lead) {
-      lead.style.visibility = settled ? '' : 'hidden';
-      if (pts.module) { const [x, y] = pts.module; lead.setAttribute('d', `M${x} ${y}L${x - 30} ${y + 52}H${x - 46}`); }
+      lead.setAttribute('d', path);
     }
   }
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000 || 0);
     last = now;
     t += dt;
-    if (list.length > 1 && !hover && (idle += dt) > AUTO) { idle = 0; show(cur + 1); }
-    // the current model grows in, the others shrink away
-    list.forEach((m, j) => {
-      m.k += ((j === cur ? 1 : 0) - m.k) * (1 - Math.exp(-dt * 5));
-      m.g.visible = m.k > 0.001 || j === cur;
-    });
+    if (list.length > 1 && !hover && p >= 1 && (idle += dt) > AUTO) { idle = 0; show(cur + 1, 1); }
+    if (p < 1) p = Math.min(1, p + dt / FLIP);
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -287,7 +366,7 @@
   document.addEventListener('themechange', applyColors);
 
   layout();
-  show(0);
+  show(0, 1);
   applyColors();
   box.classList.add('is-on'); // hide the drawn fallback
   run();
