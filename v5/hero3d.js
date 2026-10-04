@@ -244,13 +244,21 @@
     return { nodes, len: nodes.reduce((a, x) => a + x.s.length, 0) };
   });
   // show the first f (0..1) of a callout's letters, with a caret while it is half-typed
-  function typeTo(t, f) {
-    let left = Math.round(t.len * f), caret = f > 0 && f < 1;
+  // typing in: the first f of the letters, a caret where typing has got to.
+  // erasing (out): letters go from the start, left to right; the rest keeps its place
+  // (blank cells stand in for the erased letters; the font is monospaced)
+  const BLANK = '\u00a0', CARET = '\u258d';
+  function typeTo(t, f, out) {
+    const shown = Math.round(t.len * f), gone = t.len - shown, caret = f > 0 && f < 1;
+    let c = 0;
     t.nodes.forEach((x) => {
-      let s = x.s.slice(0, Math.max(0, Math.min(x.s.length, left)));
-      if (caret && left <= x.s.length) { s += '▍'; caret = false; } // the caret sits where typing has got to
+      let s = '';
+      for (const ch of x.s) {
+        if (out) s += c < gone ? (caret && c === gone - 1 ? CARET : BLANK) : ch; // erased from the left
+        else s += c < shown ? ch : caret && c === shown ? CARET : '';           // typed from the left
+        c++;
+      }
       x.n.nodeValue = s;
-      left -= x.s.length;
     });
   }
   // fix every label at its full width first, so typing never moves it
@@ -263,9 +271,9 @@
   function callouts() {
     const out = p < 1;
     const f = (k) => reduced ? 1 : out
-      ? clamp01(1 - (p - k * 0.08) / 0.22)          // erase, one after another, early in the flip
-      : clamp01((since - 0.1 - k * 0.22) / 0.45);   // type back in, one after another
-    pins.forEach((el, i) => typeTo(texts[i], f(ORDER[el.dataset.pin])));
+      ? clamp01(1 - (p - k * 0.06) / 0.16)          // erase, one after another, early in the flip
+      : clamp01((since - 0.05 - k * 0.12) / 0.22); // type back in, one after another
+    pins.forEach((el, i) => typeTo(texts[i], f(ORDER[el.dataset.pin]), out));
     if (lead) {
       const len = lead.getTotalLength ? lead.getTotalLength() : 0;
       lead.style.strokeDasharray = len;
