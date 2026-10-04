@@ -238,6 +238,41 @@
   const PIN = { sensor: new T.Vector3(0, 0.78, 0), module: new T.Vector3(-0.1, -0.02, 0.1) };
   const v = new T.Vector3();
   const lead = box.querySelector('.xray__lead');
+  const texts = pins.map((el) => {
+    const nodes = [], walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walk.nextNode()) nodes.push({ n: walk.currentNode, s: walk.currentNode.nodeValue });
+    return { nodes, len: nodes.reduce((a, x) => a + x.s.length, 0) };
+  });
+  // show the first f (0..1) of a callout's letters, with a caret while it is half-typed
+  function typeTo(t, f) {
+    let left = Math.round(t.len * f), caret = f > 0 && f < 1;
+    t.nodes.forEach((x) => {
+      let s = x.s.slice(0, Math.max(0, Math.min(x.s.length, left)));
+      if (caret && left <= x.s.length) { s += '▍'; caret = false; } // the caret sits where typing has got to
+      x.n.nodeValue = s;
+      left -= x.s.length;
+    });
+  }
+  // fix every label at its full width first, so typing never moves it
+  pins.forEach((el) => { const i = el.querySelector('i'); if (i && i.offsetWidth) i.style.width = i.offsetWidth + 1 + 'px'; });
+  // the order things go: sensor label, the leader line, the module label
+  const ORDER = { sensor: 0, lead: 1, module: 2 };
+  // fullW: width of the fully typed module label; since: seconds since the last flip settled
+  let fullW = (box.querySelector('.xray__pin--module i') || {}).offsetWidth || 120, since = 0;
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  function callouts() {
+    const out = p < 1;
+    const f = (k) => reduced ? 1 : out
+      ? clamp01(1 - (p - k * 0.08) / 0.22)          // erase, one after another, early in the flip
+      : clamp01((since - 0.1 - k * 0.22) / 0.45);   // type back in, one after another
+    pins.forEach((el, i) => typeTo(texts[i], f(ORDER[el.dataset.pin])));
+    if (lead) {
+      const len = lead.getTotalLength ? lead.getTotalLength() : 0;
+      lead.style.strokeDasharray = len;
+      lead.style.strokeDashoffset = len * (1 - f(ORDER.lead));
+    }
+    return out;
+  }
 
   // flipping between models: arrows, dots, swipe, arrow keys
   const ui = box.closest('figure') || box; // the arrows and dots sit under the canvas
@@ -310,7 +345,6 @@
       else m.clip.set(corner.set(-behind, 0, 0), behind * s);
     });
     scan.visible = flipping;
-    box.classList.toggle('is-flipping', flipping); // callouts hide at once, then fade back in
     if (flipping) {
       scan.position.x = s;
       scan.quaternion.copy(camera.quaternion); // face the viewer
@@ -320,7 +354,8 @@
     }
     renderer.render(scene, camera);
 
-    // callouts: once the model has settled, beside its outline so they never cover it
+    // callouts: beside the model's outline so they never cover it; frozen during a flip
+    if (callouts()) return;
     const m = list[cur];
     m.g.updateMatrixWorld(true);
     const o = outline(m);
@@ -329,7 +364,10 @@
     const sen = m.module.localToWorld(v.set(0, m.sensorY || 0.78, 0)).project(camera);
     const sx = (sen.x + 1) / 2 * W, sy = Math.max((1 - sen.y) / 2 * H, 22);
     const label = box.querySelector('.xray__pin--module i');
-    const lw = label ? label.offsetWidth : 120;
+    // the full width of the module label, so a half-typed label does not shift the layout
+    if (label && texts[pins.findIndex((el) => el.dataset.pin === 'module')].nodes.every((x) => x.n.nodeValue === x.s)) fullW = label.offsetWidth;
+    const lw = fullW;
+    if (label) label.style.width = lw + 'px'; // fixed box: letters appear left to right
     let lx, ly, path;
     if (o.x0 - 20 - lw >= 0) {                 // room on the left: level with the module
       lx = o.x0 - 20; ly = Math.min(Math.max(my, o.y0 + 16), H - 28);
@@ -351,7 +389,7 @@
     last = now;
     t += dt;
     if (list.length > 1 && !hover && p >= 1 && (idle += dt) > AUTO) { idle = 0; show(cur + 1, 1); }
-    if (p < 1) p = Math.min(1, p + dt / FLIP);
+    if (p < 1) { p = Math.min(1, p + dt / FLIP); since = 0; } else since += dt;
     render();
     raf = requestAnimationFrame(frame);
   }
