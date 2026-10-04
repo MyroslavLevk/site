@@ -1225,3 +1225,21 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   .xfoot { padding-top: 48px; }
   .xfoot__links nav { gap: 18px; }
 }
+
+/* ---------- hero: x-ray drone (hero3d.js); the drawn module schematic is the fallback ---------- */
+.xray { position: relative; width: 100%; max-width: 620px; aspect-ratio: 440 / 280; max-height: 42vh; margin-inline: auto; }
+.v5 .schematic .xray svg { max-width: none; max-height: none; }
+.xray canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1s var(--ease); }
+.xray__fallback { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transition: opacity .6s var(--ease); }
+.xray__over { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: 0; }
+.xray__lead { fill: none; stroke: var(--muted); stroke-width: 1; }
+.xray__pin { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; transition: opacity .6s var(--ease) .4s; }
+.xray__pin i { position: absolute; font-style: normal; white-space: nowrap; color: var(--fg); }
+.xray__pin--sensor i { translate: -50% calc(-100% - 6px); }
+.xray__pin--module i { right: 50px; top: 44px; display: grid; justify-items: end; gap: 2px; color: var(--muted); }
+.xray__pin--module b { color: var(--fg); font-weight: 500; }
+.xray.is-on canvas, .xray.is-on .xray__over, .xray.is-on .xray__pin { opacity: 1; }
+.xray.is-on .xray__fallback { opacity: 0; }
+@media (max-width: 860px) {
+  .xray { max-height: 300px; }
+}

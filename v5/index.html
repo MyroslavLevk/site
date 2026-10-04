@@ -50,8 +50,14 @@
           </div>
         </div>
 
+        <!-- x-ray drone (hero3d.js): see-through airframe, the FNAV module solid; the drawn schematic shows until 3D is up -->
         <figure class="schematic">
-          <svg viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
+          <div class="xray" id="xray">
+            <canvas aria-label="FNAV navigation module on a fixed-wing drone: the airframe drawn see-through, the 100 gram module solid on its back, sky sensor on top"></canvas>
+            <svg class="xray__over" aria-hidden="true"><path class="xray__lead"/></svg>
+            <span class="xray__pin xray__pin--sensor" data-pin="sensor" aria-hidden="true"><i class="mono">Sky sensor</i></span>
+            <span class="xray__pin xray__pin--module" data-pin="module" aria-hidden="true"><i class="mono"><b>FNAV module</b>100 g · MAVLink</i></span>
+            <svg class="xray__fallback" viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
             <!-- sky sensor view -->
             <path class="sch__dash" d="M150 96L112 14M196 96l38-82"/>
             <text class="sch__label" x="173" y="12" text-anchor="middle">SKY SENSOR</text>
@@ -75,7 +81,8 @@
             <path class="sch__dim" d="M300 74v100M295 74h10M295 174h10"/>
             <text class="sch__label" x="310" y="128">10 cm</text>
           </svg>
-          <figcaption class="mono">Navigation Module v1 — schematic, appearance illustrative</figcaption>
+          </div>
+          <figcaption class="mono">Navigation Module v1 on a fixed-wing UAV — appearance illustrative</figcaption>
         </figure>
       </div>
 

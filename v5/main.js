@@ -91,6 +91,21 @@
     });
   }
 
+  // load a script once; later calls for the same file get the same promise
+  const loaded = {};
+  const load = (src) => loaded[src] || (loaded[src] = new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = fail;
+    document.head.appendChild(s);
+  }));
+  const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+
+  /* ---------- hero: x-ray drone, once the page has loaded ---------- */
+  if (document.getElementById('xray')) {
+    const start = () => load(THREE_URL).then(() => load('hero3d.js')).catch(() => {});
+    if (document.readyState === 'complete') start(); else addEventListener('load', start);
+  }
+
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
   const game = document.getElementById('game');
   if (game) {
@@ -121,15 +136,10 @@
       });
     });
 
-    const load = (src) => new Promise((ok, fail) => {
-      const s = document.createElement('script');
-      s.src = src; s.onload = ok; s.onerror = fail;
-      document.head.appendChild(s);
-    });
     const lazy = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return;
       lazy.disconnect();
-      load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
+      load(THREE_URL)
         // optional: without the loader (or the decoder for the compressed models) the demo falls back to built-in shapes
         .then(() => Promise.all([
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
