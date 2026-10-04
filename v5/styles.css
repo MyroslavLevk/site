@@ -915,31 +915,55 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .hl > :last-child, .cards3 > :last-child { --tr-v: var(--arm); --br-v: var(--arm); }
 /* StarNav / SolarNav: the mark over the gap also gets a stem, a T like the Figma frame */
 .hl > * { --tl-v: var(--arm); --tr-v: var(--arm); --bl-v: var(--arm); --br-v: var(--arm); }
-/* the T over the gap is one mark shared by both cards: hovering either lights all of it */
+/* the T over the gap: its stem is shared and lights from either card; each half of the bar
+   lights only with the card it sits over */
 .hl > * { --cm: color-mix(in srgb, var(--bracket) 80%, transparent); }
 .hl:has(> :hover) > * { --cm: var(--accent); }
 .hl > :first-child::before {
   background:
     linear-gradient(var(--c), var(--c)) left top / var(--tl-h) 1px,
     linear-gradient(var(--c), var(--c)) left top / 1px var(--tl-v),
-    linear-gradient(var(--cm), var(--cm)) right top / var(--tr-h) 1px,
+    linear-gradient(var(--c), var(--c)) right top / var(--tr-h) 1px,
     linear-gradient(var(--cm), var(--cm)) right top / 1px var(--tr-v),
     linear-gradient(var(--c), var(--c)) left bottom / var(--bl-h) 1px,
     linear-gradient(var(--c), var(--c)) left bottom / 1px var(--bl-v),
-    linear-gradient(var(--cm), var(--cm)) right bottom / var(--br-h) 1px,
+    linear-gradient(var(--c), var(--c)) right bottom / var(--br-h) 1px,
     linear-gradient(var(--cm), var(--cm)) right bottom / 1px var(--br-v);
   background-repeat: no-repeat;
 }
 .hl > :last-child::before {
   background:
-    linear-gradient(var(--cm), var(--cm)) left top / var(--tl-h) 1px,
+    linear-gradient(var(--c), var(--c)) left top / var(--tl-h) 1px,
     linear-gradient(var(--cm), var(--cm)) left top / 1px var(--tl-v),
     linear-gradient(var(--c), var(--c)) right top / var(--tr-h) 1px,
     linear-gradient(var(--c), var(--c)) right top / 1px var(--tr-v),
-    linear-gradient(var(--cm), var(--cm)) left bottom / var(--bl-h) 1px,
+    linear-gradient(var(--c), var(--c)) left bottom / var(--bl-h) 1px,
     linear-gradient(var(--cm), var(--cm)) left bottom / 1px var(--bl-v),
     linear-gradient(var(--c), var(--c)) right bottom / var(--br-h) 1px,
     linear-gradient(var(--c), var(--c)) right bottom / 1px var(--br-v);
+  background-repeat: no-repeat;
+}
+/* AIR / SEA / GROUND: Ts over both gaps. The stems are shared: --ca colours a card's left stems,
+   --cz its right ones, and a neighbour lights the side facing it. The half-bars use --c, so they
+   light only with the card they sit over */
+.cards3 > * {
+  --tl-v: var(--arm); --tr-v: var(--arm); --bl-v: var(--arm); --br-v: var(--arm);
+  --ca: color-mix(in srgb, var(--bracket) 80%, transparent);
+  --cz: color-mix(in srgb, var(--bracket) 80%, transparent);
+}
+.cards3 > :hover, .cards3 > :focus-visible { --ca: var(--accent); --cz: var(--accent); }
+.cards3 > :hover + *, .cards3 > :focus-visible + * { --ca: var(--accent); }
+.cards3 > :has(+ :hover), .cards3 > :has(+ :focus-visible) { --cz: var(--accent); }
+.cards3 > *::before {
+  background:
+    linear-gradient(var(--c), var(--c)) left top / var(--tl-h) 1px,
+    linear-gradient(var(--ca), var(--ca)) left top / 1px var(--tl-v),
+    linear-gradient(var(--c), var(--c)) right top / var(--tr-h) 1px,
+    linear-gradient(var(--cz), var(--cz)) right top / 1px var(--tr-v),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--bl-h) 1px,
+    linear-gradient(var(--ca), var(--ca)) left bottom / 1px var(--bl-v),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--br-h) 1px,
+    linear-gradient(var(--cz), var(--cz)) right bottom / 1px var(--br-v);
   background-repeat: no-repeat;
 }
 /* 2x2: corners on the left / right edge between the rows are vertical sticks */
@@ -1244,25 +1268,13 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   .hl > *, .cards3 > * { --tl-h: 0px; --tr-h: 0px; --bl-h: 0px; --br-h: 0px; --tl-v: var(--arm); --tr-v: var(--arm); --bl-v: var(--arm); --br-v: var(--arm); }
   .hl > :first-child, .cards3 > :first-child { --tl-h: var(--arm); --tr-h: var(--arm); }
   .hl > :last-child, .cards3 > :last-child { --bl-h: var(--arm); --br-h: var(--arm); }
-  /* stacked: the shared marks are the sticks on the sides between the two cards */
-  .hl > :first-child::before {
+  /* stacked: every mark is made of two cards' own halves, each lights with its card */
+  .hl > *::before, .hl > :first-child::before, .hl > :last-child::before, .cards3 > *::before {
     background:
       linear-gradient(var(--c), var(--c)) left top / var(--tl-h) 1px,
       linear-gradient(var(--c), var(--c)) left top / 1px var(--tl-v),
       linear-gradient(var(--c), var(--c)) right top / var(--tr-h) 1px,
       linear-gradient(var(--c), var(--c)) right top / 1px var(--tr-v),
-      linear-gradient(var(--cm), var(--cm)) left bottom / var(--bl-h) 1px,
-      linear-gradient(var(--cm), var(--cm)) left bottom / 1px var(--bl-v),
-      linear-gradient(var(--cm), var(--cm)) right bottom / var(--br-h) 1px,
-      linear-gradient(var(--cm), var(--cm)) right bottom / 1px var(--br-v);
-    background-repeat: no-repeat;
-  }
-  .hl > :last-child::before {
-    background:
-      linear-gradient(var(--cm), var(--cm)) left top / var(--tl-h) 1px,
-      linear-gradient(var(--cm), var(--cm)) left top / 1px var(--tl-v),
-      linear-gradient(var(--cm), var(--cm)) right top / var(--tr-h) 1px,
-      linear-gradient(var(--cm), var(--cm)) right top / 1px var(--tr-v),
       linear-gradient(var(--c), var(--c)) left bottom / var(--bl-h) 1px,
       linear-gradient(var(--c), var(--c)) left bottom / 1px var(--bl-v),
       linear-gradient(var(--c), var(--c)) right bottom / var(--br-h) 1px,
