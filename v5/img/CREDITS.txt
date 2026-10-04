@@ -1,0 +1,8 @@
+sky-night.webp  "Milky Way Night Sky (Unsplash)", Wikimedia Commons, CC0
+                https://commons.wikimedia.org/wiki/File:Milky_Way_Night_Sky_(Unsplash).jpg
+                Cropped to the sky, colour toned down.
+sky-day.webp    "Beautiful sun in Cortina d'Ampezzo (Unsplash)", Wikimedia Commons, CC0
+                https://commons.wikimedia.org/wiki/File:Beautiful_sun_in_Cortina_d%27Ampezzo_(Unsplash).jpg
+                Cropped around the sun.
+uav.webp, usv.webp, ugv.webp   product photos supplied by FNAV.
+logo.svg, favicon.svg          vector trace of the FNAV logo.

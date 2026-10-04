@@ -1369,7 +1369,7 @@ a.hcard__foot:hover { color: var(--accent); }
 .cform label:focus-within .mono { color: var(--accent); }
 .cform .btn { justify-self: start; border: 0; border-radius: 999px; font-family: inherit; cursor: pointer; }
 .cfacts { display: grid; gap: 0; margin: 0; width: 100%; }
-.cfacts div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.cfacts div { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
 .cfacts dd { margin: 0; }
 .cfacts a { transition: color .3s; }
 .cfacts a:hover { color: var(--accent); }
@@ -1386,8 +1386,22 @@ a.hcard__foot:hover { color: var(--accent); }
   aspect-ratio: 205.7 / 72.5;
   translate: -50% -50%;
   color: var(--fg);
-  opacity: calc(.055 * (1 - var(--p) * 1.4));
+  /* hidden on load, it comes up as the page scrolls and the V takes off */
+  opacity: min(.07, calc(var(--p) * .16));
+  scale: calc(.92 + var(--p) * .08);
   pointer-events: none;
 }
-[data-theme="light"] .hero__brand { opacity: calc(.055 * (1 - var(--p) * 1.4)); }
-@media (max-width: 860px) { .hero__brand { top: 30%; width: 120vw; } }
+[data-theme="light"] .hero__brand { opacity: min(.065, calc(var(--p) * .15)); }
+@media (max-width: 860px) { .hero__brand, [data-theme="light"] .hero__brand { top: 30%; width: 120vw; opacity: .05; scale: 1; } } /* no scroll effect on phones */
+
+/* ---------- StarNav / SolarNav: real sky photos (CC0, see img/CREDITS.txt) under the HUD marks ---------- */
+.hcard__media--photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hcard__media--photo .sys__sky * { vector-effect: non-scaling-stroke; }
+.hcard__media--photo .sys__ray { stroke-width: 1.4; }
+.hcard__media--photo .sys__ref circle { fill: var(--accent); }
+.hcard__media--photo .sys__ref path, .sys__ref-box { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.hcard__media--photo .sys__sun-ring { stroke-width: 1.4; opacity: .9; }
+.hcard__media--photo::after { /* a little shade at the bottom, so the panel below reads as one piece */
+  content: ""; position: absolute; inset: auto 0 0; height: 30%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .25)); pointer-events: none;
+}

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body class="v2 v5">
 
@@ -45,18 +45,13 @@
     <div class="frame frame--2 reveal">
       <div class="hl">
         <article class="hcard">
-          <div class="hcard__media hcard__media--night">
-            <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
-              <g class="sys__stars">
-                <circle cx="40" cy="30" r="1.2"/><circle cx="92" cy="74" r="1"/><circle cx="150" cy="22" r="1.4"/>
-                <circle cx="210" cy="96" r="1"/><circle cx="262" cy="40" r="1.2"/><circle cx="330" cy="70" r="1"/>
-                <circle cx="60" cy="128" r="1"/><circle cx="300" cy="150" r="1.2"/><circle cx="180" cy="150" r="1"/>
-                <circle cx="360" cy="24" r="1.3"/><circle cx="24" cy="190" r="1"/><circle cx="120" cy="200" r="1.1"/>
-              </g>
-              <path class="sys__ray" d="M120 60L200 260M236 34L200 260M340 110L200 260"/>
+          <div class="hcard__media hcard__media--night hcard__media--photo">
+            <img src="img/sky-night.webp" alt="Night sky with the Milky Way" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 1280 457" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M384 178L640 457M924 92L640 457M1188 364L640 457"/>
               <g class="sys__ref">
-                <circle cx="120" cy="60" r="3"/><circle cx="236" cy="34" r="3"/><circle cx="340" cy="110" r="3"/>
-                <path d="M112 52h16v16h-16zM228 26h16v16h-16zM332 102h16v16h-16z"/>
+                <circle cx="384" cy="178" r="7"/><circle cx="924" cy="92" r="7"/><circle cx="1188" cy="364" r="7"/>
+                <path d="M364 158h40v40h-40zM904 72h40v40h-40zM1168 344h40v40h-40z"/>
               </g>
             </svg>
           </div>
@@ -73,12 +68,12 @@
           </div>
         </article>
         <article class="hcard">
-          <div class="hcard__media hcard__media--day">
-            <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
-              <path class="sys__track" d="M-20 220C80 40 300 40 420 220"/>
-              <path class="sys__ray" d="M250 82L200 260"/>
-              <circle class="sys__sun-ring" cx="250" cy="82" r="34"/>
-              <circle class="sys__sun" cx="250" cy="82" r="18"/>
+          <div class="hcard__media hcard__media--day hcard__media--photo">
+            <img src="img/sky-day.webp" alt="Sun in a clear sky between rock faces" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 800 286" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M240 168L400 286"/>
+              <circle class="sys__sun-ring" cx="240" cy="168" r="46"/>
+              <path class="sys__ref-box" d="M210 138h60v60h-60z"/>
             </svg>
           </div>
           <div class="hcard__body">
@@ -140,6 +135,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=13" defer></script>
+<script src="main.js?v=14" defer></script>
 </body>
 </html>
