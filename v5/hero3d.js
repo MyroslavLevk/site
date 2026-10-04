@@ -91,33 +91,32 @@
   /* ---------- UAV: straight wing with dihedral, tip fins, pod, pusher prop ---------- */
   function buildUav() {
     const g = new T.Group();
-    const wingHalf = (side) => {
-      const span = 1.2, root = 0.36, tip = 0.22;
-      const geo = warp(new T.BoxGeometry(span, 0.035, 1, 8, 1, 2), (p) => {
-        const u = p.x / span + 0.5;                       // 0 at the root, 1 at the tip
-        p.set(side * u * span, p.y * (1 - 0.5 * u), p.z * (root + (tip - root) * u) + u * 0.1);
-      });
-      const w = xray(geo);
-      w.rotation.z = side * 0.09;
-      w.position.set(side * 0.08, 0.02, 0);
+    // one continuous wing through the centre: tapered, slightly swept, with dihedral
+    const span = 1.25, root = 0.36, tip = 0.22, dihedral = 0.09;
+    const wing = warp(new T.BoxGeometry(2 * span, 0.035, 1, 20, 1, 2), (p) => {
+      const u = Math.abs(p.x) / span;                    // 0 at the centre, 1 at a tip
+      p.set(p.x, p.y * (1 - 0.5 * u) + u * span * dihedral, p.z * (root + (tip - root) * u) + u * 0.1);
+    });
+    g.add(xray(wing));
+    // tip fins, leaning outwards
+    [-1, 1].forEach((side) => {
       const fin = xray(new T.BoxGeometry(0.02, 0.24, 0.17, 1, 3, 2));
-      fin.position.set(side * (span + 0.05), 0.12, 0.17);
+      fin.position.set(side * (span + 0.01), span * dihedral + 0.11, 0.17);
       fin.rotation.set(0.25, 0, -side * 0.18);
-      w.add(fin);
-      return w;
-    };
-    g.add(wingHalf(1), wingHalf(-1));
+      g.add(fin);
+    });
+    // pod: a lathed fuselage sitting on the wing centre, the wing passes through it
     const prof = [[0, -0.42], [0.05, -0.39], [0.1, -0.3], [0.13, -0.15], [0.135, 0.05], [0.12, 0.2], [0.08, 0.3], [0.03, 0.34], [0, 0.34]]
       .map(([r, y]) => new T.Vector2(r, y));
     const podGeo = new T.LatheGeometry(prof, 14).rotateX(Math.PI / 2);
-    podGeo.scale(1.25, 0.85, 1);
-    g.add(at(xray(podGeo), 0, -0.04, 0.02));
-    g.add(at(xray(new T.SphereGeometry(0.045, 10, 6), false), 0, -0.09, -0.4));
-    g.add(at(xray(new T.CylinderGeometry(0.035, 0.045, 0.08, 10).rotateX(Math.PI / 2), false), 0, -0.02, 0.4));
-    g.add(at(new T.LineSegments(new T.EdgesGeometry(new T.CircleGeometry(0.17, 28)), M.wire), 0, -0.02, 0.45));
-    const blade = at(xray(new T.BoxGeometry(0.34, 0.012, 0.03), false), 0, -0.02, 0.45);
+    podGeo.scale(1.25, 0.95, 1);
+    g.add(at(xray(podGeo), 0, 0.03, 0.02));
+    g.add(at(xray(new T.SphereGeometry(0.045, 10, 6), false), 0, -0.04, -0.4));   // nose camera
+    g.add(at(xray(new T.CylinderGeometry(0.035, 0.045, 0.08, 10).rotateX(Math.PI / 2), false), 0, 0.03, 0.4));
+    g.add(at(new T.LineSegments(new T.EdgesGeometry(new T.CircleGeometry(0.17, 28)), M.wire), 0, 0.03, 0.45));
+    const blade = at(xray(new T.BoxGeometry(0.34, 0.012, 0.03), false), 0, 0.03, 0.45);
     g.add(blade);
-    const module = at(makeModule(), 0, 0.1, -0.04);
+    const module = at(makeModule(), 0, 0.2, -0.04);   // on top of the pod
     g.add(module);
     return { g, module, spin: blade, name: 'Fixed-wing UAV' };
   }
@@ -377,7 +376,7 @@
     const lw = fullW;
     if (label) label.style.width = lw + 'px'; // fixed box: letters appear left to right
     let lx, ly, path;
-    if (o.x0 - 20 - lw >= 0) {                 // room on the left: level with the module
+    if (o.x0 - 20 - lw >= 16) {                 // room on the left: level with the module
       lx = o.x0 - 20; ly = Math.min(Math.max(my, o.y0 + 16), H - 28);
       path = `M${mx} ${my}L${lx + 34} ${ly}H${lx + 6}`;
     } else {                                   // otherwise centred under the model
