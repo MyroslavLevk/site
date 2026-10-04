@@ -35,8 +35,12 @@
     render();
   };
 
+  // rig = where the drone points (its +z looks at the target); drone = the airframe, turned so its nose is +z
+  const rig = new T.Group();
+  scene.add(rig);
   const drone = new T.Group();
-  scene.add(drone);
+  drone.rotation.y = Math.PI;
+  rig.add(drone);
   // a see-through part: faint surface + dense wire + crisp outline
   const xray = (geo, wire = true) => {
     const g = new T.Group();
@@ -121,7 +125,7 @@
   const v = new T.Vector3();
   const lead = box.querySelector('.xray__lead');
 
-  let W = 1, H = 1, raf = 0, visible = true, t = 0, last = 0, px = 0, py = 0, tx = 0, ty = 0;
+  let W = 1, H = 1, raf = 0, visible = true, t = 0, last = 0;
   function layout() {
     W = box.clientWidth; H = box.clientHeight;
     renderer.setSize(W, H, false);
@@ -130,14 +134,33 @@
     camera.position.z = W / H < 1.4 ? 3.7 * 1.4 / (W / H) : 3.7;
     camera.updateProjectionMatrix();
   }
+  /* the nose follows the pointer, but only within limits around a three-quarter view, so the
+     wing and the module always show: yaw swings around BASE, pitch stays small, and the drone
+     banks into each turn. Without a mouse (touch, or before it moves) it sways on its own. */
+  const BASE = 0.6, YAW = 0.45, PITCH = 0.22;
+  let pointer = null, yaw = BASE, pitch = 0, roll = 0;
+  rig.rotation.order = 'YXZ';
+  function aimAt(k) {
+    let nx, ny;
+    if (pointer) {
+      const r = cv.getBoundingClientRect();
+      nx = Math.max(-1, Math.min(1, (pointer[0] - (r.left + r.width / 2)) / (r.width * 0.9)));
+      ny = Math.max(-1, Math.min(1, (pointer[1] - (r.top + r.height / 2)) / (r.height * 1.2)));
+    } else {
+      nx = Math.sin(t * 0.3); ny = Math.sin(t * 0.45) * 0.4;
+    }
+    const y0 = yaw;
+    yaw += (BASE + nx * YAW - yaw) * k;
+    pitch += (ny * PITCH - pitch) * k;
+    roll += (-(yaw - y0) * 25 - roll) * Math.min(1, k * 1.5); // bank towards the turn
+    rig.rotation.set(pitch, yaw, 0);
+    drone.rotation.z = Math.max(-0.3, Math.min(0.3, roll));
+  }
   function render() {
-    drone.rotation.y = -0.55 + (reduced ? 0 : Math.sin(t * 0.25) * 0.45) + px * 0.25;
-    drone.rotation.x = 0.08 + py * 0.12;
-    drone.rotation.z = reduced ? 0 : Math.sin(t * 0.5) * 0.03;
-    drone.position.y = reduced ? 0 : Math.sin(t * 0.8) * 0.03;
+    rig.position.y = reduced ? 0 : Math.sin(t * 0.8) * 0.03;
     blade.rotation.z = t * 30;
     renderer.render(scene, camera);
-    drone.updateMatrixWorld();
+    rig.updateMatrixWorld(true);
     const pts = {};
     pins.forEach((el) => {
       v.copy(PIN[el.dataset.pin]).applyMatrix4(drone.matrixWorld).project(camera);
@@ -147,14 +170,14 @@
     });
     if (lead && pts.module) {
       const [x, y] = pts.module;
-      lead.setAttribute('d', `M${x} ${y}L${x - 30} ${y + 52}H${x - 46}`); // down and to the left, clear of the wing
+      lead.setAttribute('d', `M${x} ${y}L${x - 34} ${y + 78}H${x - 50}`); // down and to the left, clear of the wing
     }
   }
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000 || 0);
     last = now;
     t += dt;
-    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
+    aimAt(1 - Math.exp(-dt * 3.5));
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -166,10 +189,12 @@
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; run(); }).observe(box);
   document.addEventListener('visibilitychange', run);
   new ResizeObserver(() => { layout(); render(); }).observe(box);
-  addEventListener('pointermove', (e) => { tx = e.clientX / innerWidth * 2 - 1; ty = e.clientY / innerHeight * 2 - 1; }, { passive: true });
+  addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') pointer = [e.clientX, e.clientY]; }, { passive: true });
+  document.addEventListener('mouseleave', () => { pointer = null; });
   document.addEventListener('themechange', applyColors);
 
   layout();
+  aimAt(1);
   applyColors();
   box.classList.add('is-on'); // hide the drawn fallback
   run();
