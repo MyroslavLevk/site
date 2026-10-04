@@ -1,0 +1,4 @@
+﻿crane-sokol.glb: "Port crane Sokol", supplied by the team as Port_crane_Sokol.usdz (a Sketchfab export).
+Licence: unknown - confirm the author and licence on Sketchfab before public release (CC-BY needs a credit on the site).
+Converted from USDZ: static pose of the animated model, 14k triangles unchanged, base-colour textures only
+(ambient occlusion baked in, 1024/512 px), origin moved to the centre of the portal.

@@ -19,3 +19,6 @@ dist/
 
 # Raw source models (converted copies live in v3/models)
 еку/
+
+# Raw Sketchfab downloads for v4 (compressed copies live in v4/models)
+v4/new_models/
