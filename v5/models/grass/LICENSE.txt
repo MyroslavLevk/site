@@ -1,5 +1,5 @@
-chunks.glb  "Simple grass chunks" by 3dhdscan
-            https://sketchfab.com/3d-models/simple-grass-chunks-eb4f6dc9d4e3455ea3435385faf58b60
-            Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
-            Changes: converted to metal/roughness, decimated, textures cut to base colour
-            at 512 px (WebP), meshopt-compressed.
+cards.glb   three grass clumps built from the "realtime-grass" pack (Sketchfab download,
+            realtime-grass.zip, supplied by the team).
+            Author and licence: to be filled in from the source page before public release.
+            Changes: the three grass cards (Plate1-3) crossed into clumps, textures cut to
+            480x188 WebP; the ground plane and its texture are not used.

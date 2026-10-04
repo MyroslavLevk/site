@@ -45,7 +45,7 @@
   const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 600);
   scene.add(camera);
 
-  /* ----- light: sun / moon with shadows, sky fill, onboard headlight for night ----- */
+  /* ----- light: sun / moon with shadows, sky fill (no onboard light: the platform runs dark) ----- */
   const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
   sun.position.set(-30, 45, 5);
@@ -56,9 +56,6 @@
   sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
   Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 140 });
   sun.shadow.bias = -0.0006;
-  const head = new THREE.SpotLight(0xfff2d0, 0, 90, 0.55, 0.7, 1.4);
-  head.target.position.set(0, -0.15, -10);
-  camera.add(head, head.target);
   scene.add(hemi, sun, sun.target);
 
   /* ----- sky dome: vertical gradient, haze at the horizon and a glow around the sun / moon.
@@ -102,6 +99,87 @@
     return s;
   };
 
+  /* ----- clouds: a second, nearer dome in front of the stars, sun and moon, its clouds made in
+     the shader from layered value noise on a flat sky plane, drifting slowly. They are grey and
+     heavier over the battlefield, dark at night with a silver edge towards the moon, and a
+     shell flash on the horizon lights the cloud bases above it. ----- */
+  const cloudMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+    uniforms: {
+      uTime: { value: 0 }, uCover: { value: 0.5 }, uLit: { value: new THREE.Color() }, uShade: { value: new THREE.Color() },
+      uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() },
+      uFlashDir: { value: new THREE.Vector3(0, 0, -1) }, uFlash: { value: new THREE.Color(0, 0, 0) },
+    },
+    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `precision highp float;
+      uniform float uTime; uniform float uCover; uniform vec3 uLit; uniform vec3 uShade; uniform vec3 uSunDir; uniform vec3 uSunCol;
+      uniform vec3 uFlashDir; uniform vec3 uFlash; varying vec3 vDir;
+      float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < ${quality === 2 ? 5 : 4}; i++) { v += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
+      void main(){
+        vec3 d = normalize(vDir);
+        if (d.y <= 0.0) discard;
+        vec2 p = d.xz / (d.y + 0.12) * 1.3 + vec2(uTime * 0.012, uTime * 0.004);
+        float n = fbm(p), n2 = fbm(p * 1.9 + 3.7 + uTime * 0.006);
+        float a = smoothstep(uCover, uCover + 0.28, n) * smoothstep(0.0, 0.22, d.y);
+        float thick = smoothstep(uCover, uCover + 0.5, n * 0.7 + n2 * 0.3);
+        vec3 col = mix(uLit, uShade, thick);
+        col += uSunCol * pow(max(dot(d, uSunDir), 0.0), 6.0) * (1.0 - thick) * 0.7;   // thin edges glow towards the light
+        col += uFlash * pow(max(dot(d, uFlashDir), 0.0), 5.0) * smoothstep(0.45, 0.0, d.y);
+        gl_FragColor = vec4(col, a * 0.94);
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }`,
+  });
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(330, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), cloudMat);
+  clouds.renderOrder = -1; // drawn after the stars, the sun and the moon (-2), so it passes in front of them
+  skyGroup.add(clouds);
+  /* ----- the far distance: two rings of low, ragged silhouettes (tree lines, a roof, a mast) that
+     ride with the sky, sunk in the haze, so the land does not end in a ruler-straight horizon.
+     Each is darker at the foot and fades into the fog colour at the top; not used at sea. ----- */
+  const farMat = new THREE.ShaderMaterial({
+    fog: false,
+    uniforms: { uFog: { value: new THREE.Color() }, uTone: { value: new THREE.Color() }, uMix: { value: 0.3 } },
+    vertexShader: 'attribute float aT; varying float vT; void main(){ vT = aT; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 uFog; uniform vec3 uTone; uniform float uMix; varying float vT;
+      void main(){ gl_FragColor = vec4(mix(uFog, uTone, uMix * (1.0 - vT * 0.55)), 1.0);
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }`,
+  });
+  const farRing = (r, base, seed, mix) => {
+    const N = 900, pos = [], t = [], idx = [];
+    let h = base;
+    for (let i = 0; i <= N; i++) {
+      const a = i / N * Math.PI * 2;
+      // rolling outline with tree-crown bumps, now and then a gap or a taller block
+      const hill = base + 3 * Math.sin(a * 3 + seed) + 2 * Math.sin(a * 7 + seed * 2) + 1.2 * Math.sin(a * 17 + seed * 3);
+      h += (hill + rand(-1.5, 1.5) - h) * 0.35;
+      // crowns: every vertex a little up or down; here and there a tall dead tree, a roof, a gap
+      const top = Math.max(0.5, h + rand(-0.8, 1.6) + (Math.random() < 0.03 ? rand(3, 7) : 0) - (Math.random() < 0.05 ? h * 0.75 : 0));
+      const x = Math.sin(a) * r, z = -Math.cos(a) * r;
+      pos.push(x, -40, z, x, top, z);
+      t.push(0, 1);
+      if (i < N) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('aT', new THREE.Float32BufferAttribute(t, 1));
+    g.setIndex(idx);
+    const m = new THREE.Mesh(g, farMat.clone());
+    m.material.uniforms.uMix.value = mix;
+    m.material.side = THREE.DoubleSide;
+    m.frustumCulled = false;
+    return m;
+  };
+  const farRings = [farRing(300, 7, 1.3, 0.2), farRing(245, 4.5, 4.1, 0.36)];
+  farRings.forEach((m) => skyGroup.add(m));
+
+  // look of the clouds per environment: [cover threshold by day, at night] - lower = more cloud
+  const CLOUD = { air: [0.32, 0.42], sea: [0.32, 0.42], ground: [0.3, 0.4] }; // overcast over the front
+
   /* ----- stars, sun, moon ----- */
   const starField = (n, size) => {
     const pos = new Float32Array(n * 3);
@@ -119,7 +197,7 @@
   const disc = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ fog: false }));
   disc.position.copy(SKY_POS);
   const halo = glow(0xffffff, 55);
-  disc.add(halo);
+  halo.position.copy(SKY_POS); // its own object, so it can stay when the disc is hidden behind cloud
 
   // the moon: a waxing gibbous drawn on a canvas - maria, craters, darker limb, soft terminator
   const moonTex = (() => {
@@ -171,7 +249,8 @@
   moon.position.copy(SKY_POS);
   const moonHalo = glow(0x1c2238, 60);
   moonHalo.position.copy(SKY_POS).multiplyScalar(1.01);
-  skyGroup.add(stars, disc, moonHalo, moon);
+  skyGroup.add(stars, disc, halo, moonHalo, moon);
+  moon.renderOrder = moonHalo.renderOrder = halo.renderOrder = -2; // drawn before the clouds, which pass in front
   // light comes from behind-left by day, from the moon at night (so the water shows its path)
   const LIGHT = { day: new THREE.Vector3(-30, 45, 35).normalize(), night: SKY_POS.clone().sub(new THREE.Vector3(0, 0, -30)).normalize() };
   let lightDir = LIGHT.day;
@@ -185,17 +264,28 @@
      and the camera on it) and in the ground shader. x across, s along the route.
      On the battlefield it also gets small bumps and shell craters (bowl + raised rim). ----- */
   let terrA = 0, bumpA = 0; // relief and bump amplitude of the current environment, 0 at sea
-  const CR_N = 52;
+  /* Far off the ground grid is coarse (see groundGrid) and cannot show a crater: drawn there it
+     comes out flatter than the relief, and stones lying on its rim hang in the air. So craters
+     (and the small bumps) are dug only as they come into the fine part of the grid: flat beyond CR_FAR metres ahead,
+     full depth at CR_NEAR, and the litter on them is re-seated meanwhile (see updateLitter).
+     The dark scorch of a crater is drawn at any distance. CR_SIDE = how far from the track they fall. */
+  const CR_N = 60, CR_RAND = 52, CR_NEAR = 42, CR_FAR = 66, CR_SIDE = 28; // craters[CR_RAND..] are big pits (see bigPit)
+  const crFade = (s) => { const t = clamp((CR_FAR - (s - dist)) / (CR_FAR - CR_NEAR), 0, 1); return t * t * (3 - 2 * t); };
   const craters = Array.from({ length: CR_N }, () => new THREE.Vector4(0, -1e6, 1, 0)); // x, s, radius, depth
-  const terrainH = (x, s) => {
-    let h = terrA * (0.55 * Math.sin(0.021 * x + 0.6) * Math.sin(0.017 * s + 1.1)
-      + 0.3 * Math.sin(0.047 * x - 0.033 * s + 2) + 0.15 * Math.sin(0.09 * x + 0.071 * s));
+  // full = craters at their final depth whatever the distance (used to stand objects)
+  // the lie of the land alone: what a drone holds its height over (it does not drop into every crater)
+  const reliefH = (x, s) => terrA * (0.55 * Math.sin(0.021 * x + 0.6) * Math.sin(0.017 * s + 1.1)
+    + 0.3 * Math.sin(0.047 * x - 0.033 * s + 2) + 0.15 * Math.sin(0.09 * x + 0.071 * s));
+  const terrainH = (x, s, full) => {
+    let h = reliefH(x, s);
     if (!bumpA) return h;
-    h += bumpA * (0.5 * Math.sin(0.55 * x + 0.3 * s) * Math.sin(0.47 * s - 0.2 * x + 1.3)
+    const f = full ? 1 : crFade(s);
+    if (!f) return h;
+    h += f * bumpA * (0.5 * Math.sin(0.55 * x + 0.3 * s) * Math.sin(0.47 * s - 0.2 * x + 1.3)
       + 0.3 * Math.sin(1.1 * x - 0.9 * s + 0.5) + 0.2 * Math.sin(1.7 * x + 1.3 * s + 2.1));
     for (const c of craters) {
       const q = ((x - c.x) ** 2 + (s - c.y) ** 2) / (c.z * c.z);
-      if (q < 3) h += c.w * (-Math.max(0, 1 - q) + 0.35 * Math.exp(-(((Math.sqrt(q) - 1.05) / 0.2) ** 2)));
+      if (q < 3) h += f * c.w * (-Math.max(0, 1 - q) + 0.35 * Math.exp(-(((Math.sqrt(q) - 1.05) / 0.2) ** 2)));
     }
     return h;
   };
@@ -204,21 +294,37 @@
       float h = uTerrA * (0.55 * sin(0.021 * p.x + 0.6) * sin(0.017 * p.y + 1.1)
         + 0.3 * sin(0.047 * p.x - 0.033 * p.y + 2.0) + 0.15 * sin(0.09 * p.x + 0.071 * p.y));
       if (uBump == 0.0) return h;
-      h += uBump * (0.5 * sin(0.55 * p.x + 0.3 * p.y) * sin(0.47 * p.y - 0.2 * p.x + 1.3)
+      float f = smoothstep(${CR_FAR}.0, ${CR_NEAR}.0, p.y - uDist);
+      h += f * uBump * (0.5 * sin(0.55 * p.x + 0.3 * p.y) * sin(0.47 * p.y - 0.2 * p.x + 1.3)
         + 0.3 * sin(1.1 * p.x - 0.9 * p.y + 0.5) + 0.2 * sin(1.7 * p.x + 1.3 * p.y + 2.1));
       for (int i = 0; i < ${CR_N}; i++) {
         vec2 d = (p - uCr[i].xy) / uCr[i].z;
         float q = dot(d, d);
-        if (q < 3.0) h += uCr[i].w * (-max(0.0, 1.0 - q) + 0.35 * exp(-pow((sqrt(q) - 1.05) / 0.2, 2.0)));
+        if (q < 3.0) h += f * uCr[i].w * (-max(0.0, 1.0 - q) + 0.35 * exp(-pow((sqrt(q) - 1.05) / 0.2, 2.0)));
       }
       return h;
     }`;
   // shared by the ground and water shaders
   const U = {
     dist: { value: 0 }, time: { value: 0 }, terrA: { value: 0 }, amp: { value: 1 }, bump: { value: 0 }, cr: { value: craters },
-    dry: { value: new THREE.Vector3(1, 1, 1) },
+    dry: { value: new THREE.Vector3(1, 1, 1) }, roadS0: { value: 0 }, roadOn: { value: 0 },
+    ash: { value: new THREE.Vector4(-1e6, -1e6, -1e6, -1e6) }, refl: { value: new THREE.Color() }, wet: { value: 1 },
     deep: { value: new THREE.Color() }, shallow: { value: new THREE.Color() }, foam: { value: new THREE.Color() },
   };
+
+  /* ----- the dirt road on the battlefield: a smoothed copy of the route (the vehicle keeps to it
+     and leaves it only to get round something), drawn by the ground shader with wheel ruts and
+     puddles. Its centre line, 1 m a texel from ROAD_BACK metres behind, is packed into a small
+     texture (x as 16 bits in two channels), refreshed whenever a metre has been driven. ----- */
+  const ROAD_N = 256, ROAD_BACK = 20, ROAD_SPAN = 400;
+  const roadData = new Uint8Array(ROAD_N * 4);
+  const roadTex = new THREE.DataTexture(roadData, ROAD_N, 1, THREE.RGBAFormat);
+  roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;
+  const ROAD_GLSL = `uniform sampler2D uRoad; uniform float uRoadS0; uniform float uRoadOn;
+    float roadAt(float i){ vec4 t = texture2D(uRoad, vec2((i + 0.5) / ${ROAD_N}.0, 0.5));
+      return (t.r * 255.0 * 256.0 + t.g * 255.0) / 65535.0 * ${ROAD_SPAN}.0 - ${ROAD_SPAN / 2}.0; }
+    float roadX(float s){ float t = s - uRoadS0; if (uRoadOn == 0.0 || t < 0.0 || t > ${ROAD_N - 2}.0) return 1e4;
+      float i = floor(t); return mix(roadAt(i), roadAt(i + 1.0), t - i); }`;
 
   /* ----- ground: grass / soil detail, large-scale patches against tiling, relief ----- */
   const tileCanvas = (N, paint) => {
@@ -270,7 +376,8 @@
   const TILE = 9; // world units per detail tile
   const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 });
   groundMat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uDist: U.dist, uTerrA: U.terrA, uBump: U.bump, uCr: U.cr, uDry: U.dry, uMacro: { value: macroTex } });
+    Object.assign(sh.uniforms, { uDist: U.dist, uTerrA: U.terrA, uBump: U.bump, uCr: U.cr, uDry: U.dry, uMacro: { value: macroTex },
+      uRoad: { value: roadTex }, uRoadS0: U.roadS0, uRoadOn: U.roadOn, uAsh: U.ash, uRefl: U.refl, uWet: U.wet });
     sh.vertexShader = 'uniform float uDist; varying vec2 vW;\n' + TERRAIN_GLSL + '\n' + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `
         vec4 wp0 = modelMatrix * vec4(position, 1.0);
@@ -279,16 +386,41 @@
         vec3 objectNormal = normalize(vec3((th - terrainH(P + vec2(0.5, 0.0))) * 2.0, 1.0, (terrainH(P + vec2(0.0, 0.5)) - th) * 2.0));
         vW = P;`)
       .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, th, position.z);');
-    sh.fragmentShader = `uniform sampler2D uMacro; uniform vec3 uDry; uniform float uBump; uniform vec4 uCr[${CR_N}]; varying vec2 vW;\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform sampler2D uMacro; uniform vec3 uDry; uniform float uBump; uniform vec4 uCr[${CR_N}]; varying vec2 vW; uniform vec4 uAsh; uniform vec3 uRefl; uniform float uWet;\n${ROAD_GLSL}\n` + sh.fragmentShader
       .replace('#include <map_fragment>', `
         vec3 det = texture2D(map, vW / ${TILE}.0).rgb;
         float mac = texture2D(uMacro, vW / 170.0).r, mac2 = texture2D(uMacro, vW / 53.0 + 0.37).r;
         diffuseColor.rgb *= det * mix(0.72, 1.18, mac);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uDry, smoothstep(0.42, 0.72, mac2));
+        float puddle = 0.0;
         if (uBump > 0.0) for (int i = 0; i < ${CR_N}; i++) {   // scorched, churned earth in and around each crater
           float d = length(vW - uCr[i].xy) / uCr[i].z;
           diffuseColor.rgb *= mix(1.0, 0.32 + 0.2 * det.r, (1.0 - smoothstep(0.4, 1.5, d)) * step(0.001, uCr[i].w));
-        }`);
+          // rain water standing in the bottom of about half the craters
+          puddle = max(puddle, (1.0 - smoothstep(0.3, 0.5, d)) * step(0.001, uCr[i].w) * step(0.5, fract(uCr[i].z * 7.31)));
+        }
+        if (uBump > 0.0) {
+          // puddles in low spots of the field, and grey ash where the forest burnt
+          puddle = max(puddle, smoothstep(0.66, 0.7, texture2D(uMacro, vW / vec2(29.0, 41.0) + 0.43).r) * 0.95 * uWet);
+          float ash = max(smoothstep(uAsh.x - 15.0, uAsh.x + 10.0, vW.y) * (1.0 - smoothstep(uAsh.y - 10.0, uAsh.y + 15.0, vW.y)),
+                          smoothstep(uAsh.z - 15.0, uAsh.z + 10.0, vW.y) * (1.0 - smoothstep(uAsh.w - 10.0, uAsh.w + 15.0, vW.y)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))) * vec3(0.62, 0.6, 0.6), ash * 0.85);
+        }
+        // the road: packed bare soil with ragged edges, two dark wet ruts, puddles in them
+        float rd = abs(vW.x - roadX(vW.y));
+        if (rd < 4.0) {
+          float wob = texture2D(uMacro, vW / 11.0 + 0.6).r - 0.5;
+          float road = 1.0 - smoothstep(1.6, 2.5, rd + wob * 1.2);
+          vec3 soil = diffuseColor.rgb * vec3(1.18, 1.08, 0.95) * mix(1.0, 0.82 + 0.18 / max(det.r, 0.4), 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, soil, road);
+          float rut = (1.0 - smoothstep(0.06, 0.2, abs(rd - 0.85 + wob * 0.12))) * road;
+          diffuseColor.rgb *= 1.0 - rut * 0.3;
+          puddle = max(puddle, rut * smoothstep(0.62, 0.7, texture2D(uMacro, vW / vec2(9.0, 23.0) + 0.21).r));
+        }
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.35 + vec3(0.02, 0.025, 0.03), puddle);`)
+      // standing water mirrors the grey sky
+      .replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );', 'float water = smoothstep(0.35, 0.65, puddle); float fres = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);\n outgoingLight = mix(outgoingLight, uRefl * vec3(0.92, 0.96, 1.0) * (0.16 + 0.62 * fres), water);\n gl_FragColor = vec4( outgoingLight, diffuseColor.a );')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.12, puddle);');
   };
   /* The grid is even near the camera and grows coarser towards the horizon. It does not slide
      with the camera: it moves in whole cells (see snapGround), so near vertices always sit on
@@ -301,9 +433,9 @@
   };
   const groundGrid = (fine) => {
     const dx = fine ? 0.6 : 1, dz = fine ? 0.4 : 0.7;
-    const side = gridAxis(dx, fine ? 30 : 24, 360, fine ? 1.08 : 1.12);
+    const side = gridAxis(dx, 30, 360, fine ? 1.08 : 1.12);
     const xs = [...side.slice(1).reverse().map((x) => -x), ...side];
-    const zs = [...gridAxis(dz, 12, 40, 1.15).slice(1).reverse(), ...gridAxis(dz, fine ? 50 : 35, 480, fine ? 1.06 : 1.1).map((z) => -z)];
+    const zs = [...gridAxis(dz, 12, 40, 1.15).slice(1).reverse(), ...gridAxis(dz, fine ? 50 : 45, 480, fine ? 1.06 : 1.1).map((z) => -z)];
     const pos = new Float32Array(xs.length * zs.length * 3), idx = [];
     zs.forEach((z, j) => xs.forEach((x, i) => pos.set([x, 0, z], (j * xs.length + i) * 3)));
     for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
@@ -406,7 +538,7 @@
     t.dispose();
     return env;
   };
-  const SKY_ENV = { day: skyEnv('#4f78a6', '#9fb1bd', '#173a46'), night: skyEnv('#04060d', '#1d2b4c', '#050a10') };
+  const SKY_ENV = { day: skyEnv('#77848d', '#a6a9a7', '#232c2a'), night: skyEnv('#04060d', '#1d2b4c', '#050a10') }; // an overcast sky
   const waterMat = new THREE.MeshStandardMaterial({
     roughness: 0.16, metalness: 0,
     normalMap: rippleTex, normalScale: new THREE.Vector2(0.22, 0.22),
@@ -459,8 +591,8 @@
     // sea
     wood: std(0x9a7a4e),
     rust: std(0x8a4b2a, { roughness: 0.8 }),
-    buoy: std(0xc8372d, { roughness: 0.6 }),
-    boxes: [0x2f6f9f, 0xb5452e, 0x3d7d4a, 0xc9a23a].map((c) => std(c, { roughness: 0.7 })),
+    buoy: std(0x7d3a30, { roughness: 0.6 }),
+    boxes: [0x4a5a4e, 0x6b4a3a, 0x55554a, 0x5e5240].map((c) => std(c, { roughness: 0.75 })),
     concrete: std(0x9a9a96),
     hull: std(0x2b3038, { roughness: 0.6 }),
     // ground
@@ -469,6 +601,18 @@
     sandbag: std(0xa89a72, { flatShading: true }),
     timber: std(0x5c4630),
     deadwood: std(0x4a4038),
+    charred: std(0x3a3029),
+    mine: std(0x3b2f27, { roughness: 0.8 }),
+    boomFloat: std(0x5c5f58, { roughness: 0.7 }),
+    soot: std(0x1e1916), // burnt forest
+    mud: std(0x4a3d2e, { flatShading: true }),
+    plaster: [0x7e786d, 0x6d685f, 0x857c6e].map((c) => std(c)),
+    brick: std(0x7d4c3b),
+    slab: std(0x6f6a62),
+    tarp: std(0x4d5238), // camouflage net / tarpaulin
+    tyre: std(0x1c1c1e),
+    steelRust: std(0x3d322b, { metalness: 0.4, roughness: 0.75 }), // hedgehogs: rail steel, rusty
+    teeth: std(0x55534e),
   };
 
   // Displace vertices by a hash of their position: shared corners move together, so
@@ -513,6 +657,14 @@
     craterPit: new THREE.CircleGeometry(1.5, 14).rotateX(-Math.PI / 2),
     wheel: new THREE.CylinderGeometry(0.5, 0.5, 0.4, 12).rotateZ(Math.PI / 2),
     deadTrunk: new THREE.CylinderGeometry(0.1, 0.3, 5, 7),
+    stumpTrunk: rough(new THREE.CylinderGeometry(0.15, 0.24, 2.4, 7, 3), 0.04, 6),
+    splinter: new THREE.ConeGeometry(0.07, 0.6, 4),
+    tooth: new THREE.CylinderGeometry(0.22, 0.85, 1.1, 4, 1),
+    tyre: new THREE.TorusGeometry(0.38, 0.13, 6, 12).rotateX(Math.PI / 2),
+    mineBody: new THREE.SphereGeometry(0.5, 12, 8),
+    horn: new THREE.CylinderGeometry(0.04, 0.06, 0.28, 6),
+    drum: new THREE.CylinderGeometry(0.32, 0.32, 1, 10).rotateZ(Math.PI / 2),
+    tallTrunk: rough(new THREE.CylinderGeometry(0.1, 0.2, 1, 6, 5), 0.02, 12),
     coil: new THREE.TorusGeometry(0.45, 0.03, 5, 12).rotateY(Math.PI / 2),
     mound: rough(new THREE.SphereGeometry(4, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.9, 4),
   };
@@ -628,12 +780,20 @@
       part(t, geo.box, mats.trim, 0, 5.6, 16, 4.6, 5, 7);
       part(t, geo.box, mats.glass, 0, 6.8, 12.46, 4, 1, 0.08);
       part(t, geo.box, mats.dark, 0, 9.2, 17, 1.2, 2.4, 1.6);
-      [-14, 14].forEach((z) => {                                  // quay lamps
-        part(t, geo.pole, mats.steel, 6, 5, z, 1.5, 6, 1.5);
-        const lamp = glow(0xffd9a0, 5);
-        lamp.position.set(6, 8.2, z);
-        t.add(lamp);
+      [-14, 14].forEach((z) => part(t, geo.pole, mats.steel, 6, 5, z, 1.5, 6, 1.5)); // quay lamp posts, dark: blackout
+      for (let i = 0; i < 6; i++) part(t, geo.box, mats.charred, rand(5, 13), 2.2, rand(-20, 20), rand(1, 3), 0.3, 0.4).rotation.y = rand(0, 3); // burnt wreckage on the quay
+    } },
+    // a warehouse on a pier, shelled: walls standing, the roof half fallen in, scorched
+    warehouse: { label: 'WAREHOUSE', w: 7, h: 6, far: true, fixed: true, sink: 0, build(t) {
+      part(t, geo.box, mats.concrete, 0, -0.6, 0, 12, 1.6, 18);                           // the pier it stands on
+      [[-5, 0, 0.4, 16], [5, 0, 0.4, 16], [0, -8, 10, 0.4], [0, 8, 10, 0.4]].forEach(([x, z, w, d], i) => {
+        part(t, geo.box, i === 2 ? mats.burnt : pick(mats.plaster), x, 2.4, z, w, 4.8 - (i === 1 ? 1.6 : 0), d);
       });
+      part(t, geo.box, mats.dark, 0, 1.6, 8.05, 4, 3.2, 0.1);                             // the door, blown in
+      for (let k = 0; k < 4; k++) if (k !== 1 && k !== 2) roof(t, mats.barnRoof, 0, 4.8, 10, 4, 1.6).position.z = -6 + k * 4;
+      const fallen = part(t, geo.box, mats.barnRoof, 0, 2, 0, 9, 0.15, 7);              // and what came down
+      fallen.rotation.x = 0.5;
+      part(t, geo.mound, mats.earth, 2, 0, -2, 0.5, 0.2, 0.4);
     } },
     // Sokol portal crane on the quay; a single one, always on the left (see placeCrane)
     crane: { label: 'PORT CRANE', w: 10, h: 34, max: 1, far: true, fixed: true, build(t) {
@@ -671,18 +831,18 @@
     } },
     hedgehog: { label: 'HEDGEHOG', w: 1.4, h: 1.5, fixed: true, build(t) {
       const g = new THREE.Group();
-      part(g, geo.box, mats.rust, 0, 0, 0, 2.3, 0.16, 0.16);
-      part(g, geo.box, mats.rust, 0, 0, 0, 0.16, 2.3, 0.16);
-      part(g, geo.box, mats.rust, 0, 0, 0, 0.16, 0.16, 2.3);
+      part(g, geo.box, mats.steelRust, 0, 0, 0, 2.3, 0.16, 0.16);
+      part(g, geo.box, mats.steelRust, 0, 0, 0, 0.16, 2.3, 0.16);
+      part(g, geo.box, mats.steelRust, 0, 0, 0, 0.16, 0.16, 2.3);
       g.rotation.set(0.62, 0, 0.62);
       g.position.y = 0.75;
       t.add(g);
     } },
     crater: { label: 'CRATER', w: 2.5, h: 0.6, build(t) {
-      part(t, geo.craterRim, mats.earth, 0, 0.05, 0, 1, 0.6, 1);
+      part(t, geo.craterRim, mats.mud, 0, 0.05, 0, 1, 0.6, 1);
       part(t, geo.craterPit, mats.burnt, 0, 0.04, 0);
     } },
-    wreck: { label: 'VEHICLE', w: 3.3, h: 2.4, fixed: true, build(t) {
+    wreck: { label: 'WRECK', w: 3.3, h: 2.4, fixed: true, build(t) {
       const g = new THREE.Group();
       part(g, geo.box, mats.burnt, 0, 0.95, 0, 2.4, 1.1, 5);
       part(g, geo.box, mats.rust, 0, 1.9, 0.8, 2.2, 0.9, 1.8);
@@ -690,13 +850,13 @@
       g.rotation.z = 0.07;
       t.add(g);
     } },
-    truck: { label: 'TRUCK', w: 3.1, h: 2.3, fixed: true, build(t) {
+    truck: { label: 'BURNT TRUCK', w: 3.1, h: 2.3, fixed: true, build(t) {
       part(t, geo.box, mats.dark, 0, 0.6, 0, 2.2, 0.3, 5.6);
       part(t, geo.box, mats.earth, 0, 1.4, 1.9, 2.2, 1.4, 1.8);
       part(t, geo.box, mats.timber, 0, 1.2, -1, 2.2, 0.9, 3.4);
       [[-1.1, 1.9], [1.1, 1.9], [-1.1, -1.6], [1.1, -1.6]].forEach(([x, z]) => part(t, geo.wheel, mats.dark, x, 0.45, z));
     } },
-    deadtree: { label: 'DEAD TREE', w: 1.7, h: 5.2, build(t) {
+    deadtree: { label: 'DEAD TREE', w: 1.7, h: 5.2, lean: 0.1, quiet: true, build(t) {
       part(t, geo.deadTrunk, mats.deadwood, 0, 2.5, 0).rotation.z = rand(-0.12, 0.12);
       part(t, geo.branch, mats.deadwood, 0.5, 3.4, 0, 0.8, 0.8, 0.8).rotation.z = -0.9;
       part(t, geo.branch, mats.deadwood, -0.4, 2.6, 0.1, 0.7, 0.6, 0.7).rotation.z = 1;
@@ -718,8 +878,96 @@
       part(t, geo.box, mats.timber, 0, 0.9, 0, 3, 0.2, 0.2);
       [-1.2, 0, 1.2].forEach((x) => part(t, geo.box, mats.timber, x, 0.8, 0, 0.16, 1.6, 0.16).rotation.x = 0.5);
     } },
-    shelter: { label: 'SHELTER', w: 3.2, h: 3.2, far: true, fixed: true, build(t) {
-      part(t, geo.gable, mats.sandbag, 0, 1, 0, 4, 2, 2.6);
+    // a trunk snapped by a shell: jagged top, sometimes a splinter still hanging off it
+    stump: { label: 'BROKEN TREE', w: 0.9, h: 2.4, lean: 0.14, quiet: true, build(t) {
+      const hgt = rand(1.2, 3.2), k = rand(0.9, 1.3);
+      part(t, geo.stumpTrunk, mats.charred, 0, hgt / 2, 0, k, hgt / 2.4, k);
+      // the break: a few splinters of different length round the top
+      [[0.07, 0], [-0.08, 0.05], [0, -0.09]].forEach(([x, z], i) => {
+        const l = rand(0.15, i ? 0.45 : 0.7);
+        part(t, geo.splinter, mats.charred, x * k, hgt + l / 2 - 0.05, z * k, 1, l / 0.6, 1).rotation.set(rand(-0.2, 0.2), rand(0, 6), rand(-0.2, 0.2));
+      });
+      if (Math.random() < 0.5) part(t, geo.branch, mats.charred, 0.45, hgt * 0.7, 0, 0.6, 0.7, 0.6).rotation.z = -rand(1.1, 1.8);
+    } },
+    // a farmhouse after shelling: broken walls of uneven height with gaps, no roof left but a
+    // slab fallen inside, a chimney standing, rubble heaped against the walls
+    ruin: { label: 'RUINS', w: 5.2, h: 3.4, far: true, fixed: true, build(t) {
+      const L = rand(7, 8.5), D = rand(5.5, 6.5), H = rand(2.6, 3.1), wall = pick(mats.plaster);
+      const side = (x0, z0, x1, z1) => {               // one wall in 3-4 pieces, some knocked out
+        const n = 3 + (Math.random() < 0.5 ? 1 : 0), dx = (x1 - x0) / n, dz = (z1 - z0) / n, len = Math.hypot(dx, dz);
+        for (let i = 0; i < n; i++) {
+          if (Math.random() < 0.28) continue;
+          const h = H * rand(0.3, 1), cx = x0 + dx * (i + 0.5), cz = z0 + dz * (i + 0.5);
+          const m = part(t, geo.box, Math.random() < 0.3 ? mats.burnt : wall, cx, h / 2, cz, len + 0.02, h, 0.35);
+          m.rotation.y = -Math.atan2(dz, dx);
+          if (h > H * 0.6 && Math.random() < 0.5) part(t, geo.box, mats.brick, cx, h + 0.2, cz, len * 0.4, 0.4, 0.36).rotation.y = -Math.atan2(dz, dx); // jagged top
+        }
+      };
+      side(-L / 2, -D / 2, L / 2, -D / 2); side(L / 2, -D / 2, L / 2, D / 2); side(L / 2, D / 2, -L / 2, D / 2); side(-L / 2, D / 2, -L / 2, -D / 2);
+      part(t, geo.box, mats.brick, rand(-L / 3, L / 3), (H + 1.2) / 2, rand(-D / 4, D / 4), 0.6, H + 1.2, 0.6);   // chimney
+      const slab = part(t, geo.box, mats.slab, rand(-1, 1), H * 0.35, 0, L * 0.55, 0.18, D * 0.7);              // roof fallen in
+      slab.rotation.z = rand(0.35, 0.55) * (Math.random() < 0.5 ? 1 : -1);
+      part(t, geo.mound, mats.earth, rand(-2, 2), 0, rand(-1.5, 1.5), 0.55, 0.2, 0.45);                           // rubble inside
+      part(t, geo.mound, pick(mats.plaster), L / 2 + 0.3, 0, rand(-1, 1), 0.3, 0.14, 0.4);                        // and spilled out
+      for (let i = 0; i < 3; i++) part(t, geo.box, mats.charred, rand(-L / 3, L / 3), rand(0.4, 1.4), rand(-D / 3, D / 3), 3.2, 0.15, 0.15).rotation.set(rand(-0.4, 0.4), rand(0, 3), rand(0.3, 0.8)); // charred beams
+    } },
+    // a roadside checkpoint: a guard post walled with sandbags under a camouflage net, a stack of tyres
+    checkpoint: { label: 'CHECKPOINT', w: 2.6, h: 2.6, fixed: true, build(t) {
+      for (let row = 0; row < 4; row++) {
+        const y = 0.16 + row * 0.29;
+        for (let i = 0; i < 3; i++) part(t, geo.bag, mats.sandbag, -1.25 + i * 0.95 + (row % 2) * 0.45, y, -1.3);
+        for (let i = 0; i < 3; i++) part(t, geo.bag, mats.sandbag, -1.7, y, -0.9 + i * 0.95 + (row % 2) * 0.3).rotation.y = Math.PI / 2;
+        for (let i = 0; i < 3; i++) part(t, geo.bag, mats.sandbag, 1.7, y, -0.9 + i * 0.95 + (row % 2) * 0.3).rotation.y = Math.PI / 2;
+      }
+      [[-1.6, -1.2], [1.6, -1.2], [-1.6, 1.4], [1.6, 1.4]].forEach(([x, z]) => part(t, geo.box, mats.timber, x, 1.2, z, 0.12, 2.4, 0.12));
+      part(t, geo.box, mats.tarp, 0, 2.42, 0.1, 3.8, 0.06, 3.2).rotation.x = 0.08;                                // net / roof
+      for (let i = 0; i < 4; i++) part(t, geo.tyre, mats.tyre, 2.6, 0.12 + i * 0.24, 0.6);
+    } },
+    /* --- sea on the front --- */
+    // a moored contact mine: a rusty sphere with horns, riding the swell
+    mine: { label: 'SEA MINE', w: 1.1, h: 0.9, float: true, fixed: true, build(t) {
+      part(t, geo.mineBody, mats.mine, 0, 0.3, 0);
+      [[0, 1, 0], [0.8, 0.5, 0], [-0.8, 0.5, 0], [0, 0.5, 0.8], [0, 0.5, -0.8], [0.55, 0.85, 0.55], [-0.55, 0.85, -0.55]].forEach(([x, y, z]) => {
+        const h = part(t, geo.horn, mats.dark, x * 0.5, 0.3 + (y - 0.5) * 0.6 + 0.1, z * 0.5);
+        h.lookAt(x * 10, 0.3 + (y - 0.5) * 6 + 1, z * 10); h.rotateX(Math.PI / 2);
+      });
+    } },
+    // a floating boom: a string of drums on a cable, laid across the water to stop boats
+    boom: { label: 'BOOM', w: 3.2, h: 0.6, float: true, fixed: true, across: true, sink: 0.2, build(t) {
+      for (let i = 0; i < 6; i++) part(t, geo.drum, i % 2 ? mats.mine : mats.boomFloat, -3 + i * 1.2, 0.15, 0);
+      part(t, geo.box, mats.dark, 0, 0.32, 0, 7.4, 0.05, 0.05);
+    } },
+    // half-sunk burnt boat (placeholder until the model loads)
+    hulk: { label: 'SUNKEN BOAT', w: 2.6, h: 1.4, float: true, sink: 0.45, build(t) {
+      part(t, geo.box, mats.burnt, 0, 0.2, 0, 2.2, 1, 5).rotation.z = 0.2;
+    } },
+    // a big shell crater on the track: the dent is in the terrain (a crater of the pool); this
+    // invisible stand-in lets the planner steer round it and the HUD mark it
+    pit: { label: 'LARGE CRATER', w: 1, h: 0.25, build() {} },
+    // a pine burnt and snapped by shellfire: a tall bare pole with a splintered top and stubs of branches
+    trunk: { label: 'BURNT TRUNK', w: 0.7, h: 7, lean: 0.07, quiet: true, max: 700, build(t) {
+      const H = rand(4, 9.5);
+      part(t, geo.tallTrunk, mats.soot, 0, H / 2, 0, 1, H, 1);
+      part(t, geo.splinter, mats.soot, 0.04, H + 0.2, 0, 1.3, rand(0.6, 1.4), 1.3).rotation.z = rand(-0.2, 0.2);
+      for (let i = 0, n = 2 + Math.floor(Math.random() * 4); i < n; i++) {
+        const b = part(t, geo.branch, mats.soot, 0, H * rand(0.45, 0.95), 0, 0.35, rand(0.25, 0.5), 0.35);
+        const a = rand(0, 6.3);
+        b.rotation.set(0, a, rand(0.9, 1.4));
+        b.position.x = Math.cos(a) * 0.3; b.position.z = -Math.sin(a) * 0.3;
+      }
+    } },
+    // a whole tree down on the ground, roots and all
+    fallen: { label: 'FALLEN TREE', w: 2.8, h: 0.7, fixed: true, quiet: true, build(t) {
+      const L = rand(5, 7);
+      part(t, geo.tallTrunk, mats.soot, 0, 0.25, 0, 1.3, L, 1.3).rotation.z = Math.PI / 2;
+      part(t, geo.mound, mats.earth, -L / 2, 0, 0, 0.18, 0.22, 0.2);                     // the root plate torn out
+      for (let i = 0; i < 3; i++) part(t, geo.branch, mats.charred, rand(-L / 3, L / 2.2), 0.4, rand(-0.3, 0.3), 0.4, 0.5, 0.4).rotation.set(rand(-1, 1), 0, rand(0.3, 1));
+    } },
+    // dragon's teeth: truncated concrete pyramids in two staggered rows, set out in long belts
+    teeth: { label: "DRAGON'S TEETH", w: 2.3, h: 1.1, fixed: true, across: true, quiet: true, build(t) {
+      [[-1.5, -0.65], [0, -0.65], [1.5, -0.65], [-0.75, 0.7], [0.75, 0.7], [2.25, 0.7]].forEach(([x, z]) => {
+        part(t, geo.tooth, mats.teeth, x + rand(-0.1, 0.1), 0.5, z + rand(-0.1, 0.1)).rotation.y = Math.PI / 4 + rand(-0.15, 0.15);
+      });
     } },
     supply: { label: 'SUPPLY CRATE', w: 1.1, h: 1.1, fixed: true, build(t) {
       part(t, geo.box, mats.wood, 0, 0.5, 0, 1.2, 1, 1.2);
@@ -735,58 +983,91 @@
      seg = length of one planning step; scatter = [class, square metres per object];
      alts = drone altitude above ground [lowest, highest cruise, highest climb], climb = steepest dy/ds;
      overfly = clearance needed to pass over an object instead of around it. ----- */
+  /* Every platform weaves: its track is a snake (cfg.meander: wavelength and amplitude ranges,
+     a new bend chosen at every crossing) laid over a goal that wanders across the strip, and
+     obstacles are put on the line it is about to take (cfg.obs: spacing and kinds) so that it has
+     to steer round them, showing off the onboard avoidance the module is for. Now and then a gate
+     (cfg.gate) bars the way: a row of obstacles across the whole reach of a step with one gap,
+     `shift` metres off to one side, just wide enough (`slack` metres to spare each way), which the
+     planner has to find.
+     lane = scattered things keep this far off that line, leaving room to swerve;
+     agile = sideways reach of a planning step, times the usual; segRef = the step length the
+     per-step chances of the extras were tuned for (see per). */
   const ENV = {
+    // the front from a low-flying drone: shell-pocked fields burnt or gone to weed between tree
+    // lines, wrecked farms, burnt-out vehicles, broken pylons, now and then a burnt forest
     air: {
-      speed: 17, margin: 1.8, band: 85, limit: 70, slope: 0.32, seg: [40, 60], relief: 3,
+      speed: 17, margin: 1.8, band: 72, limit: 62, slope: 0.5, seg: [30, 42], segRef: 50, relief: 3, bumps: 0.12,
+      litter: 0.4, forest: 0.4, rows: 1.6, // lighter than the ground: share of litter, density of burnt forest, spacing in tree lines
       alts: [2.6, 7, 15], climb: 0.2, overfly: 1.5,
-      scatter: [['pine', 330], ['tree', 900], ['rock', 900], ['hay', 1000]],
+      meander: [120, 170, 12, 18], lane: 6, agile: 1.5,
+      obs: { every: [16, 28], kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine', 'stump', 'mast'] },
+      gate: { chance: 0.5, kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine'], step: 5.5, slack: 1.4, shift: [5, 11], span: 26 },
+      scatter: [['deadtree', 900], ['stump', 1600], ['tree', 2600], ['pine', 3200], ['crater', 2600], ['hedgehog', 5000]],
       extras(s0, s1) {
-        for (let k = 0; k < 2; k++) {
-          if (Math.random() < 0.4) {
-            scatter('house', s0, s1);
-            if (Math.random() < 0.6) scatter('barn', s0, s1);
-            if (Math.random() < 0.5) scatter('silo', s0, s1);
-          }
-          if (Math.random() < 0.12) scatter('mast', s0, s1);
-          if (Math.random() < 0.15) scatter('windmill', s0, s1);
-          if (freeFields.length && Math.random() < 0.75) placeField(s0, s1);
-        }
+        planForests(s1 + 50);
+        burntForest(s0, s1);
+        treeLines(s0, s1);
+        if (per(0.25)) ruins(s0, s1);
+        if (per(0.35)) scatter('wreck', s0, s1);
+        if (per(0.25)) scatter('truck', s0, s1);
+        if (per(0.1)) defenceBelt(s0, s1);
+        if (per(0.15)) scatter('mast', s0, s1);
+        for (let k = 0; k < 2; k++) if (freeFields.length && per(0.6)) placeField(s0, s1);
       },
     },
+    // a contested coast: grey water, mines and booms, burnt and sunken boats, a shelled port
     sea: {
-      alt: 1.7, speed: 10, margin: 1.6, band: 85, limit: 70, slope: 0.26, seg: [36, 52], relief: 0,
+      alt: 1.7, speed: 10, margin: 1.6, band: 85, limit: 70, slope: 0.6, seg: [26, 36], segRef: 44, relief: 0,
+      meander: [90, 140, 8, 14], lane: 6, agile: 1.5,
       // two locations: open water with a heavy swell, and the sheltered approach to a port
       locs: {
         open: {
           amp: 1,
-          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['buoy', 2600], ['boat', 2400], ['container', 3200]],
+          obs: { every: [14, 24], kinds: ['mine', 'mine', 'mine', 'buoy', 'hulk', 'hulk', 'debris', 'log', 'barrel', 'boat'] },
+          gate: { chance: 0.35, kinds: ['boom', 'boom', 'boom', 'mine', 'mine'], step: 4.5, slack: 1.3, shift: [4, 9], span: 22 },
+          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['mine', 2000], ['hulk', 2600], ['buoy', 3200], ['boat', 4000], ['container', 4000]],
           extras(s0, s1) {
-            if (Math.random() < 0.25) scatter('cargoship', s0, s1);
-            if (Math.random() < 0.12) scatter('lighthouse', s0, s1);
+            if (per(0.2)) scatter('cargoship', s0, s1);
+            if (per(0.1)) scatter('lighthouse', s0, s1);
           },
         },
         port: {
           amp: 0.35,
-          scatter: [['buoy', 1200], ['boat', 1300], ['container', 1900], ['debris', 1700], ['barrel', 1900]],
+          obs: { every: [14, 22], kinds: ['mine', 'mine', 'buoy', 'hulk', 'hulk', 'boat', 'container', 'debris'] },
+          gate: { chance: 0.4, kinds: ['boom', 'boom', 'boom', 'hulk', 'container'], step: 5, slack: 1.3, shift: [4, 9], span: 22 },
+          plumes: 8,
+          scatter: [['hulk', 1100], ['boat', 1800], ['container', 1700], ['debris', 1300], ['barrel', 1700], ['mine', 2600], ['buoy', 2600]],
           extras(s0, s1) {
-            if (Math.random() < 0.5) placeCrane(s0, s1);
-            if (Math.random() < 0.6) scatter('port', s0, s1);
-            if (Math.random() < 0.7) scatter('cargoship', s0, s1);
-            if (Math.random() < 0.6) scatter('dock', s0, s1);
-            if (Math.random() < 0.2) scatter('lighthouse', s0, s1);
+            if (per(0.5)) placeCrane(s0, s1);
+            if (per(0.6)) scatter('port', s0, s1);
+            if (per(0.45)) scatter('warehouse', s0, s1);
+            if (per(0.6)) scatter('cargoship', s0, s1);
+            if (per(0.6)) scatter('dock', s0, s1);
+            if (per(0.15)) scatter('lighthouse', s0, s1);
           },
         },
       },
     },
+
+    // the grey zone of today's front: open fields between shelled tree lines, positions dug
+    // into those tree lines, belts of dragon's teeth and wire, burnt-out vehicles, no one in the open
     ground: {
-      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.24, seg: [28, 40], relief: 1.4, bumps: 0.16,
-      scatter: [['hedgehog', 520], ['crater', 600], ['deadtree', 700], ['block', 900], ['barricade', 1000],
-        ['supply', 900], ['sandbags', 1000], ['trench', 2600], ['wire', 2600]],
+      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.5, seg: [20, 28], segRef: 34, relief: 1.4, bumps: 0.16, even: 4,
+      meander: [80, 120, 6, 9], lane: 6, agile: 1.5, lines: 0.6, // tree lines: chance of one across per step
+      obs: { every: [10, 20], kinds: ['stump', 'stump', 'deadtree', 'crater', 'crater', 'hedgehog', 'hedgehog', 'hedgehog', 'sandbags', 'sandbags', 'block', 'wire', 'wreck', 'truck'] },
+      gate: { chance: 0.35, kinds: ['hedgehog', 'hedgehog', 'block', 'stump', 'sandbags'], step: 3.2, slack: 1, shift: [3, 7], span: 16 },
+      scatter: [['deadtree', 400], ['stump', 460], ['crater', 950], ['hedgehog', 800], ['sandbags', 1300], ['wire', 3000], ['block', 3400]],
       extras(s0, s1) {
-        if (Math.random() < 0.4) scatter('dugout', s0, s1);
-        if (Math.random() < 0.5) scatter('shelter', s0, s1);
-        if (Math.random() < 0.35) scatter('wreck', s0, s1);
-        if (Math.random() < 0.3) scatter('truck', s0, s1);
+        planForests(s1 + 50);
+        burntForest(s0, s1);
+        treeLines(s0, s1);
+        if (per(0.2)) bigPit(s0, s1);
+        if (per(0.12)) ruins(s0, s1);
+        if (per(0.07)) checkpoint(s0, s1);
+        if (per(0.13)) defenceBelt(s0, s1);
+        if (per(0.4)) scatter('wreck', s0, s1);
+        if (per(0.3)) scatter('truck', s0, s1);
       },
     },
   };
@@ -870,7 +1151,7 @@
   }
 
   /* ----- ready-made models (licence files sit next to them in models/): pines and dead
-     trees by Quaternius, rocks, boats, buoys, cargo, crates and tents by Kenney, all CC0;
+     trees by Quaternius, rocks, boats, buoys, cargo, crates and fences by Kenney, all CC0;
      broadleaf trees from a CGTrader tree pack, decimated for the web (see trees/LICENSE.txt).
      The hand-built shapes above are placeholders: they show at once and stay as the
      fallback (e.g. when the page is opened from disk and files cannot be fetched).
@@ -878,36 +1159,35 @@
      loaded, every pooled object of that class swaps to a real model.
      fit = which dimension is matched to the class: 'h' height, 'w' footprint.
      set = the file holds several models side by side (five trees), used one by one. ----- */
+  const BURNT_TONE = [0.25, [1.25, 1, 0.8]];
   const MODELS = {
-    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'] },
-    tree: { env: 'air', fit: 'h', set: true, files: ['trees/pack01'] },
-    rock: { env: 'air', fit: 'w', files: ['rock_largeA', 'rock_largeC', 'rock_largeE', 'stone_largeB'] },
-    log: { env: 'sea', fit: 'w', files: ['log_large', 'log'] },
-    buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'] },
-    container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'] },
+    // tone: the toy-bright kits dulled to the greys and rust of the front (see prepare)
+    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'], tone: [0.8, 0.55, [0.95, 0.95, 0.9]] },
+    tree: { env: 'air', fit: 'h', set: true, files: ['trees/pack01'], tone: [0.8, 0.5, [1, 0.95, 0.85]] },
+    log: { env: 'sea', fit: 'w', files: ['log_large', 'log'], tone: [0.35, 0.4, [1, 0.92, 0.85]] },
+    buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'], tone: [0.7, 0.35, [1, 0.95, 0.9]] },
+    container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'], tone: [0.55, 0.2, [1.2, 1, 0.85]] },
     barrel: { env: 'sea', fit: 'w', files: ['pirate/barrel'] },
-    debris: { env: 'sea', fit: 'w', files: ['pirate/crate', 'survival/box-large'] },
-    boat: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small', 'watercraft/boat-speed-a'] },
-    cargoship: { env: 'sea', fit: 'w', files: ['watercraft/ship-cargo-a', 'watercraft/ship-cargo-b', 'watercraft/ship-cargo-c'] },
-    deadtree: { env: 'ground', fit: 'h', set: true, files: ['trees/dead'] },
-    barricade: { env: 'ground', fit: 'w', files: ['survival/fence-fortified'] },
-    shelter: { env: 'ground', fit: 'w', files: ['survival/tent', 'survival/tent-canvas', 'survival/structure-canvas', 'survival/structure-metal'] },
-    supply: { env: 'ground', fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
+    debris: { env: 'sea', fit: 'w', files: ['pirate/crate', 'survival/box-large'], tone: [0.65, 0.45, [1, 0.95, 0.9]] },
+    boat: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small', 'watercraft/boat-speed-a'], tone: [0.6, 0.12, [0.95, 1, 1]] },
+    // the same boats burnt out and half sunk
+    hulk: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small'], tone: [0.35, ...BURNT_TONE] },
+    cargoship: { env: 'sea', fit: 'w', files: ['watercraft/ship-cargo-a', 'watercraft/ship-cargo-b', 'watercraft/ship-cargo-c'], tone: [0.55, 0.15, [1.1, 1, 0.92]] },
+    deadtree: { env: ['ground', 'air'], fit: 'h', set: true, files: ['trees/dead'] },
+    barricade: { env: ['ground', 'air'], fit: 'w', files: ['survival/fence-fortified'] },
+    supply: { env: ['ground', 'air'], fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
     // single models from poly.pizza (see models/poly/LICENSE.txt)
-    barn: { env: 'air', fit: 'w', files: ['poly/barn', 'poly/big-barn'] },
-    silo: { env: 'air', fit: 'h', files: ['poly/silo'] },
-    hay: { env: 'air', fit: 'w', files: ['poly/hay'] },
-    windmill: { env: 'air', fit: 'h', files: ['poly/windmill'] },
     mast: { env: 'air', fit: 'h', files: ['poly/pylon'] },
-    lighthouse: { env: 'sea', fit: 'h', files: ['poly/lighthouse'] },
+    lighthouse: { env: 'sea', fit: 'h', files: ['poly/lighthouse'], tone: [0.6, 0.25, [1.1, 1, 0.92]] },
     dock: { env: 'sea', fit: 'w', files: ['poly/dock'] },
     // pivot = keep the model's own origin (centre of the portal), so the jib overhang is not squeezed into the footprint
     crane: { env: 'sea', fit: 'h', pivot: true, files: ['port/crane-sokol'] },
-    wreck: { env: 'ground', fit: 'w', files: ['poly/broken-car', 'poly/tank', 'poly/pickup-armored', 'vehicles/humvee-wreck'] },
+    // burnt = colour factor that chars models which come clean (the Humvee is a scan of a real wreck)
+    wreck: { env: ['ground', 'air'], fit: 'w', files: ['poly/broken-car', 'poly/pickup-armored', 'vehicles/humvee-wreck'], burnt: { 'poly/pickup-armored': 0.4, 'poly/broken-car': 0.75 } },
     // Sketchfab models (see models/vehicles/LICENSE.txt)
-    truck: { env: 'ground', fit: 'w', files: ['vehicles/gaz51-a', 'vehicles/gaz51-b', 'vehicles/gaz51-c'] },
-    sandbags: { env: 'ground', fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
-    block: { env: 'ground', fit: 'w', files: ['poly/barrier'] },
+    truck: { env: ['ground', 'air'], fit: 'w', files: ['vehicles/gaz51-a', 'vehicles/gaz51-b', 'vehicles/gaz51-c'], burnt: { 'vehicles/gaz51-a': 0.4, 'vehicles/gaz51-b': 0.4, 'vehicles/gaz51-c': 0.4 } },
+    sandbags: { env: ['ground', 'air'], fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
+    block: { env: ['ground', 'air'], fit: 'w', files: ['poly/barrier'] },
   };
   // hand-built classes are instanced too, from three pre-built variants each
   // (except those carrying glow sprites, which instancing cannot draw)
@@ -936,7 +1216,9 @@
       });
     };
     // scale a model to its class, stand it on the ground (or sink it into the water), centre it
-    const prepare = (node, cls, fit, pivot) => {
+    // tone = [brightness, saturation kept, [r, g, b] tint]: burnt-out vehicles, or bright toy
+    // colours dulled to the drab of the front
+    const prepare = (node, cls, fit, pivot, tone) => {
       bb.setFromObject(node); bb.getSize(size); bb.getCenter(mid);
       const r = Math.max(size.x, size.z) / 2;
       const k = fit === 'h' ? cls.h / size.y : cls.w * 0.95 / r;
@@ -953,6 +1235,17 @@
         (Array.isArray(m.material) ? m.material : [m.material]).forEach((mat) => {
           mat.metalness = 0; // some kits ship fully metallic materials, which render black here
           mat.roughness = 0.9;
+          if (tone && !mat.userData.toned) { // meshes may share a material: tone it once
+            mat.userData.toned = true;
+            const [f, sat, [r, g, b]] = tone, key = `tone${sat},${r},${g},${b}`;
+            mat.color.multiplyScalar(f);
+            if (mat.emissive) mat.emissive.multiplyScalar(0.2); // no glowing windows on the front
+            mat.onBeforeCompile = (sh) => {
+              sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+                diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, ${sat.toFixed(2)}) * vec3(${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)});`);
+            };
+            mat.customProgramCacheKey = () => key; // the same function with other numbers: keep the programs apart
+          }
           if (mat.transparent || mat.alphaTest > 0) { // leaf cards: hard cut-out instead of blending, so they sort and shadow correctly
             mat.transparent = false;
             mat.alphaTest = 0.5;
@@ -965,13 +1258,15 @@
       holder.add(inner);
       return holder;
     };
+    const BURNT = [0.25, [1.25, 1, 0.8]];
+    const toneOf = (spec, file) => (spec.burnt && spec.burnt[file] ? [spec.burnt[file], ...BURNT] : spec.tone || null);
     return (env) => Object.keys(MODELS).forEach((type) => {
       const spec = MODELS[type], cls = CLASSES[type];
-      if (spec.env !== env || asked[type]) return;
+      if (!(spec.env === env || (Array.isArray(spec.env) && spec.env.includes(env))) || asked[type]) return;
       asked[type] = true;
       Promise.all(spec.files.map(load)).then((scenes) => {
         const list = [];
-        scenes.filter(Boolean).forEach((sc) => (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot))));
+        scenes.forEach((sc, i) => sc && (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot, toneOf(spec, spec.files[i])))));
         if (!list.length) return;
         variants[type] = list.map(makeVariant); // objects made from now on are drawn instanced straight away
         objects.forEach((o) => {
@@ -997,7 +1292,7 @@
     t.repeat.set(14, 1);
     return t;
   })();
-  const CROPS = [0xb39a4e, 0x587f3a, 0x5f4632, 0xbfae4a, 0x70904a];
+  const CROPS = [0x6e6545, 0x56593a, 0x3a3128, 0x2c2723, 0x77704f]; // unharvested stubble, weeds, bare and burnt earth
   const fields = [], freeFields = [];
   for (let i = 0; i < 16; i++) {
     const g = new THREE.PlaneGeometry(1, 1, 10, 20).rotateX(-Math.PI / 2);
@@ -1030,14 +1325,17 @@
      a piece that falls behind is moved to the far end of the view. Craters are dents in
      the terrain itself (see terrainH), recycled the same way. ----- */
   const LITTER = [
-    { g: rough(new THREE.IcosahedronGeometry(0.15, 0), 0.06, 11), m: std(0x5f5b55, { flatShading: true }), n: 650, lift: 0.04 },
+    { g: rough(new THREE.IcosahedronGeometry(0.15, 0), 0.06, 11), m: std(0x4d4945, { flatShading: true }), n: 650, lift: 0.04 },
     { g: rough(new THREE.DodecahedronGeometry(0.16, 0), 0.06, 4), m: mats.earth, n: 650, lift: 0.02 },
     { g: new THREE.BoxGeometry(0.24, 0.07, 0.11), m: std(0x8a4a36), n: 280, lift: 0.03 },
     { g: new THREE.BoxGeometry(0.9, 0.04, 0.12), m: mats.timber, n: 200, lift: 0.02, tilt: 0.15 },
     { g: new THREE.BoxGeometry(0.55, 0.02, 0.38), m: std(0x4a352a, { metalness: 0.3, roughness: 0.7 }), n: 200, lift: 0.03, tilt: 0.35 },
     { g: new THREE.CylinderGeometry(0.035, 0.035, 0.22, 6).rotateZ(Math.PI / 2), m: std(0xb08a3a, { metalness: 0.5, roughness: 0.45 }), n: 200, lift: 0.035 },
-    { g: new THREE.BoxGeometry(0.35, 0.18, 0.3), m: mats.deadwood, n: 120, lift: 0.06, tilt: 0.4 }, // charred chunks
+    { g: new THREE.BoxGeometry(0.35, 0.18, 0.3), m: mats.deadwood, n: 180, lift: 0.06, tilt: 0.4 }, // charred chunks
+    { g: rough(new THREE.CylinderGeometry(0.03, 0.06, 1.6, 5, 3).rotateZ(Math.PI / 2), 0.04, 8), m: std(0x33281f, { flatShading: true }), n: 220, lift: 0.04, tilt: 0.06, size: [0.5, 1.1] }, // branches shot off the trees
   ];
+  // bump = how hard a piece kicks the hull when a wheel runs over it (per metre of its size)
+  [0.15, 0.12, 0.08, 0.05, 0.04, 0.02, 0.18, 0.08].forEach((b, i) => { LITTER[i].bump = b; });
   const litter = new THREE.Group();
   litter.visible = false;
   scene.add(litter);
@@ -1054,7 +1352,7 @@
   }
   LITTER.forEach(addLitter);
   // how many pieces are drawn, and whether they cast shadows (grass never does: thousands of cut-out cards)
-  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter); im.castShadow = quality === 2 && !K.grass; });
+  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter * (cfg.litter || 1)); im.castShadow = quality === 2 && !K.grass; });
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e3 = new THREE.Euler(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
   // stand piece i of kind K on the ground; the group sits at z = dist, so a piece's local z is -s
   function setLitter(K, i) {
@@ -1068,6 +1366,7 @@
     const K = LITTER[k], t = K.tilt || 0.1, size = K.size || [0.6, 1.6];
     K.s[i] = s; K.x[i] = pathX(s) + rand(-55, 55) * Math.sqrt(Math.random()); // denser near the track
     K.rx[i] = rand(-t, t); K.ry[i] = rand(0, 6.3); K.rz[i] = rand(-t, t); K.k[i] = rand(size[0], size[1]);
+    if (K.grass && inForest(s)) K.k[i] = 0.001;           // burnt ground: no grass
     setLitter(K, i);
   }
   const scatterLitter = (k) => {
@@ -1076,74 +1375,61 @@
     K.meshes.forEach((im) => { im.instanceMatrix.needsUpdate = true; });
   };
 
-  /* ----- grass: tufts and turf chunks cut from a scanned pack ("Simple grass chunks" by
-     3dhdscan, CC BY 4.0, see models/grass/LICENSE.txt). They join the litter once the file
-     has loaded with the other ground models; until then the field is bare.
-     nodes = the pack's nodes that make one piece; size = scale range (the pack is in metres). ----- */
-  const GRASS = [
-    { nodes: ['rostlinka_07c'], n: 1400, size: [0.7, 1.5] },                                 // tall tuft
-    { nodes: ['r12_a'], n: 500, size: [2.5, 5] },                                            // small sprigs
-    { nodes: ['r12_b'], n: 500, size: [2.5, 5] },
-    { nodes: ['r12_c'], n: 400, size: [3, 6] },
-    { nodes: ['rostlinka_07_ground'], n: 30, size: [1.5, 2.6], lift: -0.01 },               // flat weed mat
-    { nodes: ['ground_close_04', 'rostlinka_7c_scater', 'Forest001'], n: 40, size: [0.8, 1.3], lift: -0.04 }, // turf chunk
+  /* ----- grass and fallen sticks, from two small files (see models/grass and models/sticks).
+     They join the litter once loaded with the other ground models; until then the field is bare.
+     Each grass clump is three crossed cards; every clump gets its own shade between a tired
+     green and dry straw, so the field reads late-summer and trampled rather than lawn.
+     size = scale range in metres (a clump is 1 high, a stick 1 long). ----- */
+  const DRY = [new THREE.Color(0x8f9a5a), new THREE.Color(0xc9b27a), new THREE.Color(0x9a8a62)];
+  const LITTER_FILES = [
+    { file: 'grass/cards', kinds: [
+      { node: 'grass1', n: 900, size: [0.3, 0.75], grass: true, shade: true },
+      { node: 'grass2', n: 800, size: [0.35, 0.9], grass: true, shade: true },
+      { node: 'grass3', n: 700, size: [0.25, 0.6], grass: true, shade: true },
+    ] },
+    { file: 'sticks/sticks', kinds: [1, 2, 3, 4, 5, 6].map((k) => ({ node: 'stick' + k, n: 70, size: [0.3, 1.0], lift: -0.03, tilt: 0.08 })) },
   ];
-  // the files are quantized (attributes stored as small integers); turn a copy back into floats
-  // before transforms are baked into it, or the baked values are truncated
-  const NORM = { Int8Array: 127, Uint8Array: 255, Int16Array: 32767, Uint16Array: 65535 };
-  function floatGeometry(src) {
-    const g = new THREE.BufferGeometry();
-    if (src.index) g.setIndex(src.index.clone());
-    Object.keys(src.attributes).forEach((name) => {
-      const a = src.attributes[name], n = a.itemSize, f = new Float32Array(a.count * n);
-      const div = a.normalized ? NORM[(a.isInterleavedBufferAttribute ? a.data.array : a.array).constructor.name] || 1 : 1;
-      const get = ['getX', 'getY', 'getZ', 'getW'];
-      for (let i = 0; i < a.count; i++) for (let c = 0; c < n; c++) f[i * n + c] = Math.max(a[get[c]](i) / div, a.normalized ? -1 : -Infinity);
-      g.setAttribute(name, new THREE.BufferAttribute(f, n));
-    });
-    return g;
-  }
   function loadGrass() {
     if (!THREE.GLTFLoader || loadGrass.done) return;
     loadGrass.done = true;
     const loader = new THREE.GLTFLoader();
-    if (window.MeshoptDecoder) loader.setMeshoptDecoder(window.MeshoptDecoder);
-    loader.load('models/grass/chunks.glb', (gltf) => {
-      const sc = gltf.scene, bb = new THREE.Box3(), c = new THREE.Vector3();
-      sc.updateMatrixWorld(true);
-      GRASS.forEach((G) => {
-        // bake each mesh of the piece into its own geometry, then stand the piece on its base centre
-        const parts = [];
-        G.nodes.forEach((name) => {
-          const node = sc.getObjectByName(name);
-          if (node) node.traverse((m) => { if (m.isMesh) parts.push({ g: floatGeometry(m.geometry).applyMatrix4(m.matrixWorld), m: m.material }); });
-        });
-        if (!parts.length) return;
-        bb.makeEmpty();
-        parts.forEach((p) => { p.g.computeBoundingBox(); bb.union(p.g.boundingBox); });
-        bb.getCenter(c);
-        parts.forEach((p) => {
-          p.g.translate(-c.x, -bb.min.y, -c.z);
-          const mat = p.m;
-          mat.metalness = 0; mat.roughness = 1;
+    LITTER_FILES.forEach((F) => loader.load('models/' + F.file + '.glb', (gltf) => {
+      F.kinds.forEach((G) => {
+        const node = gltf.scene.getObjectByName(G.node);
+        if (!node || !node.isMesh) return;
+        const mat = node.material;
+        mat.metalness = 0; mat.roughness = 1;
+        if (G.grass) {
           mat.transparent = false; mat.alphaTest = 0.5; mat.side = THREE.DoubleSide;
-          mat.needsUpdate = true;
-        });
-        const K = { parts, n: G.n, size: G.size, lift: G.lift || 0, tilt: 0.06, grass: true };
+          // the cards carry upward normals (lit like the ground under them); a double-sided material
+          // would turn them downwards on the back faces, and half the clumps would come out black
+          mat.onBeforeCompile = (sh) => {
+            sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
+              THREE.ShaderChunk.normal_fragment_begin.replace('gl_FrontFacing ? 1.0 : - 1.0', '1.0'));
+          };
+        }
+        const K = { g: node.geometry, m: mat, n: G.n, size: G.size, lift: G.lift || 0, tilt: G.tilt || 0.06, grass: !!G.grass, bump: G.grass ? 0 : 0.14 };
         addLitter(K);
+        if (G.shade) K.meshes.forEach((im) => {
+          const c = new THREE.Color();
+          for (let i = 0; i < K.n; i++) im.setColorAt(i, c.copy(pick(DRY)).lerp(pick(DRY), Math.random()));
+          im.instanceColor.needsUpdate = true;
+        });
         litterQuality(K);
         LITTER.push(K);
         if (envName === 'ground') scatterLitter(LITTER.length - 1);
       });
       if (!raf) render();
-    });
+    }));
   }
   function spawnCrater(c, s0, s1) {
+    // shells land in groups: most new craters open next to one already in this stretch
+    const near = craters.filter((o) => o !== c && o.w > 0 && o.y > s0 - 15 && o.y < s1);
     for (let i = 0; i < 8; i++) {
-      const s = rand(s0, s1), big = Math.random() < 0.2, r = big ? rand(2.5, 4) : rand(0.9, 2.2);
-      const x = pathX(s) + rand(-50, 50);
-      // only steer clear of the bigger things; small litter and crates may sit on a rim
-      if (objects.some((o) => o.visible && Math.hypot(x - o.position.x, s - o.userData.s) < r + o.userData.w * 0.5) || (big && Math.abs(x - pathX(s)) < r + 2)) continue;
+      const big = Math.random() < 0.2, r = big ? rand(2.5, 4) : rand(0.9, 2.2), o = near.length && Math.random() < 0.6 ? pick(near) : null;
+      const s = o ? o.y + rand(-8, 8) : rand(s0, s1), x = o ? clamp(o.x + rand(-8, 8), pathX(s) - CR_SIDE, pathX(s) + CR_SIDE) : pathX(s) + rand(-CR_SIDE, CR_SIDE);
+      // never under an object: a solid thing cannot follow the dent and would hang over it
+      if (objects.some((o) => o.visible && Math.hypot(x - o.position.x, s - o.userData.s) < r * 1.5 + o.userData.w * 0.6) || (big && Math.abs(x - pathX(s)) < r + 2)) continue;
       c.set(x, s, r, r * rand(0.24, 0.34));
       // re-seat the litter the new dent has moved
       LITTER.forEach((K) => { for (let j = 0; j < K.n; j++) if (Math.abs(K.s[j] - s) < r * 1.8 && Math.hypot(K.x[j] - x, K.s[j] - s) < r * 1.8) setLitter(K, j); });
@@ -1153,10 +1439,248 @@
   }
   function updateLitter() {
     litter.position.z = dist;
-    for (const c of craters) if (c.y < dist - 10) spawnCrater(c, dist + DEPTH - 30, dist + DEPTH);
+    for (let i = 0; i < CR_RAND; i++) if (craters[i].y < dist - 10) spawnCrater(craters[i], dist + DEPTH - 30, dist + DEPTH);
+    // craters being dug as they come closer (see crFade): keep the litter on them lying on the ground
+    const digging = craters.filter((c) => c.w > 0 && c.y - dist > CR_NEAR - 2 * c.z && c.y - dist < CR_FAR + 2 * c.z);
+    const s0 = dist + CR_NEAR - 10, s1 = dist + CR_FAR + 10;
     LITTER.forEach((K, k) => {
-      for (let i = 0; i < K.n; i++) if (K.s[i] < dist - 6) placeLitter(k, i, K.s[i] + DEPTH + 5);
+      for (let i = 0; i < K.n; i++) {
+        if (K.s[i] < dist - 6) placeLitter(k, i, K.s[i] + DEPTH + 5);
+        else if (K.s[i] > s0 && K.s[i] < s1) {
+          for (const c of digging) if (Math.abs(K.s[i] - c.y) < c.z * 1.8 && Math.abs(K.x[i] - c.x) < c.z * 1.8) { setLitter(K, i); break; }
+        }
+      }
       if (K.dirty) { K.meshes.forEach((im) => { im.instanceMatrix.needsUpdate = true; }); K.dirty = false; }
+    });
+  }
+
+  /* ----- smoke over the battlefield: a few columns rising from burning wrecks and fresh hits
+     far ahead, all puffs drawn in one call (instanced billboards; size, fade and drift are
+     worked out in the shader from each puff's age). At night the foot of a column glows. ----- */
+  const PLUMES = 8, PUFFS = 24, FLAMES = 6; // columns in use: cfg.plumes (5 unless set)
+  const puffTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 9; i++) {                        // a lumpy cloud, not a perfect disc
+      const x = 32 + rand(-9, 9), y = 32 + rand(-9, 9), r = rand(12, 20);
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, 'rgba(255,255,255,.35)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+    }
+    return new THREE.CanvasTexture(c);
+  })();
+  const smokeGeo = new THREE.InstancedBufferGeometry();
+  smokeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]), 3));
+  smokeGeo.setIndex([0, 1, 2, 0, 2, 3]);
+  const puffPos = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * PUFFS * 3), 3);
+  const puffArg = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * PUFFS * 4), 4); // age, size, darkness, spin
+  puffPos.setUsage(THREE.DynamicDrawUsage);
+  smokeGeo.setAttribute('aPos', puffPos);
+  smokeGeo.setAttribute('aArg', puffArg);
+  smokeGeo.instanceCount = PLUMES * PUFFS;
+  const smokeMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: {
+      uTex: { value: puffTex }, uDark: { value: new THREE.Color() }, uLight: { value: new THREE.Color() },
+      uFire: { value: new THREE.Color() }, uFog: { value: new THREE.Color() }, uFogD: { value: 0 },
+    },
+    vertexShader: `attribute vec3 aPos; attribute vec4 aArg; varying vec2 vUv; varying float vT; varying float vDark; varying float vFog;
+      uniform float uFogD;
+      void main(){
+        float t = aArg.x, size = aArg.y * (1.5 + 9.0 * sqrt(t)), c = cos(aArg.w + t * 1.5), s = sin(aArg.w + t * 1.5);
+        vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+        mv.xy += mat2(c, s, -s, c) * position.xy * size;
+        gl_Position = projectionMatrix * mv;
+        vUv = position.xy + 0.5; vT = t; vDark = aArg.z;
+        vFog = 1.0 - exp(-uFogD * uFogD * mv.z * mv.z * 0.45); // thinner than the ground fog, so columns read from afar
+      }`,
+    fragmentShader: `uniform sampler2D uTex; uniform vec3 uDark; uniform vec3 uLight; uniform vec3 uFire; uniform vec3 uFog;
+      varying vec2 vUv; varying float vT; varying float vDark; varying float vFog;
+      void main(){
+        float a = texture2D(uTex, vUv).a * smoothstep(0.0, 0.08, vT) * pow(1.0 - vT, 1.4);
+        vec3 col = mix(uLight, uDark, vDark * (1.0 - vT * 0.6));
+        col += uFire * (1.0 - smoothstep(0.0, 0.16, vT));
+        gl_FragColor = vec4(mix(col, uFog, vFog), a * 0.85 * (1.0 - vFog * 0.6));
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }`,
+  });
+  const smoke = new THREE.Mesh(smokeGeo, smokeMat);
+  smoke.frustumCulled = false;
+  smoke.renderOrder = 2;
+  smoke.visible = false;
+  scene.add(smoke);
+  const wind = new THREE.Vector2(rand(0.35, 0.6) * (Math.random() < 0.5 ? -1 : 1), rand(-0.25, 0.15)); // drift per metre of rise
+  const plumes = Array.from({ length: PLUMES }, () => ({ x: 0, s: -1e6, y: 0, h: 20, rate: 0.1, dark: 0.5, fire: glow(0xff5a14, 3) }));
+  plumes.forEach((p) => { p.fire.visible = false; scene.add(p.fire); });
+  // flames: tongues of fire drawn in the shader (a flickering, tapering blob, white-yellow at the
+  // root, red at the tips), additive, one call for all of them
+  const flameGeo = new THREE.InstancedBufferGeometry();
+  flameGeo.setAttribute('position', smokeGeo.getAttribute('position'));
+  flameGeo.setIndex(smokeGeo.getIndex());
+  const flamePos = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * FLAMES * 3), 3);
+  const flameArg = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * FLAMES * 4), 4); // width, height, seed, strength
+  flamePos.setUsage(THREE.DynamicDrawUsage);
+  flameGeo.setAttribute('aPos', flamePos);
+  flameGeo.setAttribute('aArg', flameArg);
+  flameGeo.instanceCount = PLUMES * FLAMES;
+  const flameMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: U.time, uFogD: { value: 0 }, uGain: { value: 1 } },
+    vertexShader: `attribute vec3 aPos; attribute vec4 aArg; uniform float uTime; uniform float uFogD;
+      varying vec2 vUv; varying float vSeed; varying float vA;
+      void main(){
+        float fl = 0.8 + 0.2 * sin(uTime * 11.0 + aArg.z * 7.0) + 0.1 * sin(uTime * 23.0 + aArg.z);
+        vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+        mv.xy += vec2(position.x * aArg.x, (position.y + 0.5) * aArg.y * fl);
+        gl_Position = projectionMatrix * mv;
+        vUv = position.xy + 0.5; vSeed = aArg.z;
+        vA = aArg.w * exp(-uFogD * uFogD * mv.z * mv.z * 0.35);
+      }`,
+    fragmentShader: `uniform float uTime; uniform float uGain; varying vec2 vUv; varying float vSeed; varying float vA;
+      void main(){
+        vec2 p = vUv * 2.0 - 1.0;
+        p.x += sin(vUv.y * 7.0 - uTime * 9.0 + vSeed * 3.0) * 0.18 * vUv.y;
+        float w = mix(0.95, 0.12, pow(vUv.y, 0.8));                 // wide at the root, a tip at the top
+        float a = smoothstep(w, w * 0.25, abs(p.x)) * smoothstep(1.0, 0.55, vUv.y) * smoothstep(0.0, 0.12, vUv.y);
+        vec3 col = mix(vec3(1.0, 0.86, 0.5), vec3(1.0, 0.32, 0.06), smoothstep(0.1, 0.8, vUv.y));
+        gl_FragColor = vec4(col * a * vA * uGain, a * vA);
+      }`,
+  });
+  const flames = new THREE.Mesh(flameGeo, flameMat);
+  flames.frustumCulled = false;
+  flames.renderOrder = 3;
+  scene.add(flames);
+  plumes.forEach((p) => { p.tongues = Array.from({ length: FLAMES }, () => ({ dx: 0, dz: 0, w: 1, h: 2, seed: rand(0, 100) })); });
+  const BURNS = { wreck: true, truck: true, hulk: true, port: true, warehouse: true }; // what may be on fire
+  // light a column somewhere ahead: on a wreck when there is one far enough out, else on open ground
+  function spawnPlume(p, s0, s1) {
+    const w = objects.filter((o) => o.visible && BURNS[o.userData.type] && o.userData.s > s0 && o.userData.s < s1 && !plumes.some((q) => q.wreck === o));
+    const o = w.length && Math.random() < 0.6 ? pick(w) : null;
+    p.wreck = o;
+    p.s = o ? o.userData.s : rand(s0, s1 + 120);
+    p.x = o ? o.position.x : pathX(Math.min(p.s, dist + DEPTH)) + rand(-110, 110);
+    p.y = terrainH(p.x, p.s, true) + (o ? (o.userData.type === 'port' || o.userData.type === 'warehouse' ? 2.4 : 0.6) : 0);
+    if (o && (o.userData.type === 'port')) p.x = o.position.x + (o.rotation.y ? -1 : 1) * rand(6, 12); // on the quay, not in the water
+    p.h = rand(18, 40); p.rate = rand(0.05, 0.09); p.dark = o ? rand(0.75, 1) : rand(0.2, 0.7); p.seed = rand(0, 100);
+    p.fire.scale.setScalar(o ? 3.5 : 2.2);
+    p.fire.material.opacity = o ? 0.8 : 0.5;
+    // the fire itself: a burning hull or vehicle has a big one, open ground a small one
+    const big = o ? 1 : 0.45, spread = o ? o.userData.w * 0.6 : 0.8;
+    p.flame = Math.random() < (o ? 1 : 0.5) ? big : 0;
+    p.tongues.forEach((t) => Object.assign(t, { dx: rand(-spread, spread), dz: rand(-spread, spread), w: rand(0.7, 1.4) * big + 0.3, h: rand(1.4, 3.2) * big + 0.4 }));
+  }
+  function updateSmoke() {
+    const active = cfg.plumes || 5;
+    plumes.forEach((p, k) => {
+      if (k >= active) p.s = -1e6;                       // not in use here: an old puff, invisible
+      else if (p.s < dist - 20) spawnPlume(p, dist + 90, dist + DEPTH);
+      p.fire.visible = k < active && !day;
+      p.fire.position.set(p.x, p.y + 0.8, dist - p.s);
+      p.tongues.forEach((t, i) => {
+        const j = k * FLAMES + i, on = k < active && p.flame;
+        flamePos.setXYZ(j, p.x + t.dx, p.y - 0.3, dist - p.s + t.dz);
+        flameArg.setXYZW(j, t.w, t.h, t.seed, on ? 0.9 : 0);
+      });
+      for (let i = 0; i < PUFFS; i++) {
+        const j = k * PUFFS + i, t = k < active ? (time * p.rate + i / PUFFS) % 1 : 0.999, rise = t * p.h;
+        const wob = Math.sin(t * 7 + p.seed + i) * (0.4 + t * 2);
+        puffPos.setXYZ(j, p.x + wind.x * rise + wob, p.y + rise, dist - p.s - wind.y * rise);
+        puffArg.setXYZW(j, t, 0.6 + 0.4 * Math.abs(Math.sin(p.seed + i * 1.7)), p.dark, p.seed + i * 2.4);
+      }
+    });
+    puffPos.needsUpdate = puffArg.needsUpdate = true;
+    flamePos.needsUpdate = flameArg.needsUpdate = true;
+  }
+
+  /* ----- mist: low banks lying in the fields off to the left or right, wide soft billboards
+     drawn in one call like the smoke. They fade out as they come close, so their flat cards are
+     never seen up near, and drift a little. Over the farmland and the battlefield, not at sea. ----- */
+  const BANKS = 6, SHEETS = 8;
+  const mistGeo = new THREE.InstancedBufferGeometry();
+  mistGeo.setAttribute('position', smokeGeo.getAttribute('position'));
+  mistGeo.setIndex(smokeGeo.getIndex());
+  const mistPos = new THREE.InstancedBufferAttribute(new Float32Array(BANKS * SHEETS * 3), 3);
+  const mistArg = new THREE.InstancedBufferAttribute(new Float32Array(BANKS * SHEETS * 3), 3); // width, height, opacity
+  mistPos.setUsage(THREE.DynamicDrawUsage);
+  mistGeo.setAttribute('aPos', mistPos);
+  mistGeo.setAttribute('aArg', mistArg);
+  mistGeo.instanceCount = BANKS * SHEETS;
+  const mistMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uTex: { value: puffTex }, uCol: { value: new THREE.Color() }, uFog: { value: new THREE.Color() }, uFogD: { value: 0 } },
+    vertexShader: `attribute vec3 aPos; attribute vec3 aArg; varying vec2 vUv; varying float vA; varying float vFog; uniform float uFogD;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+        mv.xy += position.xy * aArg.xy;
+        gl_Position = projectionMatrix * mv;
+        vUv = position.xy + 0.5;
+        vA = aArg.z * smoothstep(14.0, 40.0, -mv.z);
+        vFog = 1.0 - exp(-uFogD * uFogD * mv.z * mv.z);
+      }`,
+    fragmentShader: `uniform sampler2D uTex; uniform vec3 uCol; uniform vec3 uFog; varying vec2 vUv; varying float vA; varying float vFog;
+      void main(){
+        gl_FragColor = vec4(mix(uCol, uFog, vFog), texture2D(uTex, vUv).a * vA);
+        #include <tonemapping_fragment>
+        #include <encodings_fragment>
+      }`,
+  });
+  const mist = new THREE.Mesh(mistGeo, mistMat);
+  mist.frustumCulled = false;
+  mist.renderOrder = 1;
+  scene.add(mist);
+  const banks = Array.from({ length: BANKS }, () => ({ s: -1e6, x: 0, sheets: [] }));
+  function spawnBank(b, s0, s1) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    b.s = rand(s0, s1);
+    b.x = pathX(Math.min(b.s, dist + DEPTH)) + side * rand(10, 50);
+    b.sheets = Array.from({ length: SHEETS }, () => {
+      const w = rand(16, 30), h = rand(3.5, 7);
+      return { dx: rand(-12, 12), ds: rand(-18, 18), w, h, a: rand(0.32, 0.55), ph: rand(0, 6) };
+    });
+  }
+  function updateMist() {
+    banks.forEach((b, k) => {
+      if (b.s < dist - 20) spawnBank(b, dist + 120, dist + DEPTH + 60);
+      b.sheets.forEach((q, i) => {
+        const j = k * SHEETS + i, ss = b.s + q.ds, x = b.x + q.dx + Math.sin(time * 0.04 + q.ph) * 3;
+        mistPos.setXYZ(j, x, terrainH(x, ss, true) + q.h * 0.45, dist - ss);
+        mistArg.setXYZ(j, q.w, q.h, q.a);
+      });
+    });
+    mistPos.needsUpdate = mistArg.needsUpdate = true;
+  }
+
+  /* ----- the war beyond the horizon at night: flashes of distant shelling, low on the skyline.
+     They ride with the sky, so they never come closer. ----- */
+  const flashes = Array.from({ length: 3 }, () => {
+    const f = glow(0xff9a50, 40);
+    f.material.opacity = 0;
+    f.userData = { next: rand(1, 6), t: 1 };
+    skyGroup.add(f);
+    return f;
+  });
+  // clouds drift; at night the brightest shell flash lights the cloud bases above it
+  const flashCol = new THREE.Color(0xff8a40);
+  function updateClouds(dt) {
+    cloudMat.uniforms.uTime.value += dt;
+    let f = null;
+    if (!day) for (const g of flashes) if (!f || g.material.opacity > f.material.opacity) f = g;
+    if (f) cloudMat.uniforms.uFlashDir.value.copy(f.position).normalize();
+    cloudMat.uniforms.uFlash.value.copy(flashCol).multiplyScalar(f ? f.material.opacity * 1.6 : 0);
+  }
+  function updateFlashes(dt) {
+    flashes.forEach((f) => {
+      const u = f.userData;
+      if ((u.next -= dt) < 0) {
+        const a = rand(-1.1, 1.1) + (Math.random() < 0.3 ? Math.PI : 0);
+        f.position.set(Math.sin(a) * 380, rand(4, 14), -Math.cos(a) * 380);
+        f.scale.setScalar(rand(25, 55));
+        u.next = rand(1.5, 7); u.t = 0; u.peak = rand(0.15, 0.4);
+      }
+      u.t += dt;
+      f.material.opacity = u.peak * Math.exp(-u.t * 5) * (u.t < 0.05 ? u.t / 0.05 : 1);
     });
   }
 
@@ -1171,6 +1695,7 @@
      every object. The cost prefers flying straight and drifting towards a goal that
      changes every few hundred metres, so the route sweeps far left and right. ----- */
   let dist = 0, time = 0, goal = 0, goalUntil = 0, prefY = 0;
+  const bend = { phase: 0, len: 150, amp: 0 }; // the meander of a winding track (cfg.meander)
   const wp = [];
   // quintic Hermite from (p0, slope v0) to (p1, slope v1) over length L, zero curvature at both ends;
   // order 0 = position, 1 = slope d/ds, 2 = curvature d2/ds2
@@ -1189,6 +1714,24 @@
     return hermite(a[k], a[v], b[k], b[v], b.s - a.s, clamp((s - a.s) / (b.s - a.s), 0, 1), order);
   }
   const pathX = (s) => route(s, 0);
+  // the road: the route averaged over 60 m, so it runs smooth through the swerves round obstacles
+  const roadX = (s) => {
+    let sum = 0, wsum = 0;
+    for (let o = -30; o <= 30; o += 5) { const w = 31 - Math.abs(o); sum += pathX(s + o) * w; wsum += w; }
+    return sum / wsum;
+  };
+  let roadFrom = -1e9;
+  function updateRoad() {
+    const s0 = Math.floor(dist) - ROAD_BACK;
+    if (s0 === roadFrom) return;
+    roadFrom = s0;
+    for (let i = 0; i < ROAD_N; i++) {
+      const v = Math.round(clamp((roadX(s0 + i) + ROAD_SPAN / 2) / ROAD_SPAN, 0, 1) * 65535);
+      roadData[i * 4] = v >> 8; roadData[i * 4 + 1] = v & 255;
+    }
+    roadTex.needsUpdate = true;
+    U.roadS0.value = s0;
+  }
   const pathY = (s) => route(s, 0, 'y');
 
   // would a route point (x, altitude y) at s strike object o? A drone may pass over low ones.
@@ -1205,8 +1748,15 @@
     return false;
   };
   // does it touch anything already standing? (no house inside a tree, no crate inside a pier)
-  const overlaps = (x, s, w) => objects.some((o) => o.visible &&
+  const inCrater = (x, s, w) => bumpA > 0 && craters.some((c) => c.w > 0 && Math.hypot(x - c.x, s - c.y) < c.z * 1.5 + w * 0.6);
+  const overlaps = (x, s, w) => inCrater(x, s, w) || objects.some((o) => o.visible &&
     Math.hypot(x - o.position.x, s - o.userData.s) < w + o.userData.w + 0.8);
+  // distance to the nearest standing object (used to fill the gaps first)
+  const room = (x, s) => {
+    let d = 1e9;
+    for (const o of objects) if (o.visible && Math.abs(s - o.userData.s) < d) d = Math.min(d, Math.hypot(x - o.position.x, s - o.userData.s) - o.userData.w);
+    return d;
+  };
 
   function put(o, x, s, scale, side) {
     const c = o.userData.cls, w = c.w * scale;
@@ -1216,9 +1766,10 @@
       : c.along ? rand(-0.12, 0.12) + (Math.random() < 0.5 ? 0 : Math.PI)
       : c.far ? rand(-0.5, 0.5) + (Math.random() < 0.5 ? 0 : Math.PI / 2)
       : rand(0, Math.PI * 2), 0);
+    if (c.lean) { o.rotation.x = rand(-c.lean, c.lean); o.rotation.z = rand(-c.lean, c.lean); }
     // stand it at the lowest point of its footprint: sunk a little on a slope, never floating
-    let y = terrainH(x, s);
-    if (terrA) for (const [dx, ds] of [[w, 0], [-w, 0], [0, w], [0, -w]]) y = Math.min(y, terrainH(x + dx, s + ds));
+    let y = terrainH(x, s, true);
+    if (terrA) for (const [dx, ds] of [[w, 0], [-w, 0], [0, w], [0, -w]]) y = Math.min(y, terrainH(x + dx, s + ds, true));
     o.position.set(x, y, dist - s);
     Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6) });
     o.visible = true;
@@ -1232,14 +1783,187 @@
     if (!o) return;
     const c = o.userData.cls, scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale, h = c.h * scale;
     const cx = wp[wp.length - 1].x;
-    for (let i = 0; i < 12; i++) {
+    // on the battlefield, of a few free spots take the one furthest from everything else, so the
+    // field fills evenly instead of in clumps with bare patches between them
+    let best = null, bestRoom = -1;
+    for (let i = 0, ok = 0; i < 12 && ok < (cfg.even || 1); i++) {
       const s = rand(s0, s1), x = xOf ? xOf(cx) : cx + rand(-cfg.band, cfg.band);
       if (s - w - cfg.margin < s0 + 8 && onRoute(x, s, w, h)) continue;
+      if (cfg.lane && Math.abs(x - lane(s)) < w + cfg.lane) continue;
       if (overlaps(x, s, w)) continue;
-      put(o, x, s, scale, x > cx ? 1 : -1);
-      return o;
+      ok++;
+      const r = cfg.even ? room(x, s) : 0;
+      if (r > bestRoom) { best = [x, s]; bestRoom = r; }
     }
+    if (best) { put(o, best[0], best[1], scale, best[0] > cx ? 1 : -1); return o; }
     release(o);
+  }
+
+  /* ----- the battlefield layout. Tree lines (windbreaks between fields) are what is left
+     standing on the front: rows of leafless, shelled trees and snapped trunks. Every so often
+     one crosses the track, with a gap where the track runs through, and the positions are dug
+     in along it: a trench, a dugout, sandbags. Others run beside the track for a while. ----- */
+  const TREES = { deadtree: true, stump: true, trunk: true };
+  // stand one piece of a row at (x, s), if nothing bigger is there (trees in a row may stand close)
+  function plant(type, x, s) {
+    if (TREES[type] && cfg.lane && Math.abs(x - lane(s)) < cfg.lane) return null; // room to swerve round what is put on the lane
+    if (inCrater(x, s, 1) || objects.some((o) => o.visible && Math.hypot(x - o.position.x, s - o.userData.s) < (TREES[o.userData.type] ? 1.8 : o.userData.w + 2))) return null;
+    const o = take(type);
+    if (!o) return null;
+    put(o, x, s, o.userData.cls.fixed ? 1 : rand(0.8, 1.3), 1);
+    return o;
+  }
+  const treeOrStump = () => (Math.random() < 0.7 ? 'deadtree' : 'stump');
+  const rowStep = () => rand(2.6, 4.6) / Math.sqrt(Q.density) * (cfg.rows || 1);
+  let alongs = []; // tree lines running beside the track: { x at s0, drift dx/ds, end }
+  function treeLines(s0, s1) {
+    const a = wp[wp.length - 1], band = cfg.band;
+    if (per(cfg.lines || 0.3)) {                         // one across the track
+      const s = rand(s0 + 14, s1), tilt = rand(-0.3, 0.3), gap = lane(s) + rand(-1.5, 1.5);
+      for (let x = a.x - band; x < a.x + band; x += rowStep()) {
+        if (Math.abs(x - gap) < 6.5) continue;
+        if (Math.random() < 0.08) { x += rand(5, 12); continue; } // shelled out completely here
+        plant(treeOrStump(), x, s + (x - a.x) * tilt + rand(-1.2, 1.2));
+      }
+      // the position along it, on the far side, away from the track
+      for (let k = 0; k < 2; k++) {
+        const side = Math.random() < 0.5 ? -1 : 1, x = gap + side * rand(14, band * 0.8), ss = s + (x - a.x) * tilt + 5;
+        const kind = k === 0 ? 'trench' : Math.random() < 0.5 ? 'dugout' : 'sandbags';
+        const o = plant(kind, x, ss);
+        if (o) { o.rotation.y = -Math.atan(tilt); syncInst(o); }
+        if (o && Math.random() < 0.5) plant(Math.random() < 0.5 ? 'supply' : 'barricade', x + rand(-5, 5), ss + rand(2, 4));
+      }
+    }
+    alongs = alongs.filter((l) => l.end > s0);
+    if (alongs.length < 3 && per(cfg.lines ? 0.5 : 0.35)) { // one beside it, starting here
+      const side = Math.random() < 0.5 ? -1 : 1;
+      alongs.push({ x: a.x + side * rand(16, 45), s: s0, drift: rand(-0.08, 0.08), end: s0 + rand(60, 220) });
+    }
+    for (const l of alongs) {
+      for (let s = s0; s < Math.min(s1, l.end); s += rowStep()) {
+        if (Math.random() < 0.06) { s += rand(5, 12); continue; }
+        plant(treeOrStump(), l.x + (s - l.s) * l.drift + rand(-1.2, 1.2), s);
+      }
+    }
+  }
+  /* something on the line the platform is heading along every so often (cfg.obs), so it keeps
+     steering round things: on the ground mostly what lies about everywhere, a wreck rarely;
+     trees and silos in the air; buoys, boats and flotsam at sea */
+  let nextObs = 0;
+  let gateAt = -1e9; // where the gate of the step being planned stands (single obstacles keep off it)
+  function gate(s0, s1) {
+    const G = cfg.gate;
+    if (!G || !per(G.chance)) return;
+    const s = rand(s0 + (s1 - s0) * 0.7, s1 + 3), base = lane(s);
+    // the gap: off to one side of the line, but within what one step can reach
+    const lo = Math.max(laneFrom - laneReach * 0.85, -cfg.limit + 8), hi = Math.min(laneFrom + laneReach * 0.85, cfg.limit - 8);
+    let side = Math.random() < 0.5 ? -1 : 1;
+    if (base + side * G.shift[0] < lo || base + side * G.shift[0] > hi) side = -side;
+    const gapX = clamp(base + side * rand(G.shift[0], G.shift[1]), lo, hi);
+    for (let x = base - G.span; x <= base + G.span; x += G.step * rand(0.85, 1.15)) {
+      const o = take(pick(G.kinds));
+      if (!o) continue;
+      const scale = o.userData.cls.fixed ? 1 : rand(0.85, 1.1), ss = s + rand(-1.2, 1.2);
+      // the way through: room for the platform and its margin, with a little to spare
+      if (Math.abs(x - gapX) < o.userData.cls.w * scale + cfg.margin + G.slack) { release(o); continue; }
+      if (objects.some((q) => q.visible && Math.hypot(x - q.position.x, ss - q.userData.s) < q.userData.w + 0.6)) { release(o); continue; }
+      put(o, x, ss, scale, 1);
+    }
+    gateAt = s;
+  }
+  function inPath(s0, s1) {
+    const a = wp[wp.length - 1];
+    nextObs = Math.max(nextObs, s0 + (s1 - s0) * 0.55);    // early in a step the curve has not swung out yet
+    for (; nextObs < s1; nextObs += rand(cfg.obs.every[0], cfg.obs.every[1])) {
+      const s = nextObs, x = lane(s) + rand(-2.5, 2.5);     // on the line the step is about to take
+      if (Math.abs(s - gateAt) < 12) continue;                         // the gate is enough there
+      if (Math.abs(x) > cfg.limit - 8) continue;                       // leave room to pass it on either side
+      const o = take(pick(cfg.obs.kinds));
+      if (!o) continue;
+      if (overlaps(x, s, o.userData.cls.w * 0.6)) { release(o); continue; } // something is there already: fine too
+      put(o, x, s, o.userData.cls.fixed ? 1 : rand(0.85, 1.2), 1);
+    }
+  }
+
+  // what is left of a hamlet by the road: two to four houses on one side
+  function ruins(s0, s1) {
+    const a = wp[wp.length - 1], side = Math.random() < 0.5 ? -1 : 1, s = rand(s0 + 10, s1);
+    for (let i = 0, n = 2 + Math.floor(Math.random() * 3); i < n; i++) {
+      const ss = s + i * rand(13, 18), x = a.x + side * rand(15, 40);
+      const o = plant('ruin', x, ss);
+      if (o) { o.rotation.y = rand(-0.2, 0.2) + (Math.random() < 0.5 ? 0 : Math.PI / 2); syncInst(o); }
+    }
+  }
+  // a checkpoint at the roadside, with concrete blocks staggered across the road to slow traffic
+  function checkpoint(s0, s1) {
+    const s = rand(s0 + (s1 - s0) * 0.6 + 9, s1 + 6), side = Math.random() < 0.5 ? -1 : 1;
+    const x = lane(s);
+    const o = plant('checkpoint', x + side * rand(5, 6.5), s);
+    if (!o) return;
+    o.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; syncInst(o);       // facing the road
+    plant('block', x - side * 2.2, s - 9);
+    plant('block', x + side * 2.2, s + 9);
+    if (Math.random() < 0.6) plant('hedgehog', x + side * 3.5, s + 2);
+  }
+
+  /* a stretch of burnt forest now and then (after a frame from an FPV drone over the front): a
+     dense stand of snapped, charred trunks, a few dead crowns, fallen trees, grey ash on the
+     ground and no grass; the road runs through it in a clear lane */
+  let forests = [];                                       // { s0, s1 }, the next ones ahead
+  const inForest = (s) => forests.some((f) => s > f.s0 && s < f.s1);
+  function planForests(upTo) {
+    if (!forests.length) forests.push({ s0: dist + rand(140, 260), s1: 0 });
+    let f = forests[forests.length - 1];
+    if (!f.s1) f.s1 = f.s0 + rand(130, 220);
+    while (f.s1 < upTo) { f = { s0: f.s1 + rand(380, 700), s1: 0 }; f.s1 = f.s0 + rand(130, 220); forests.push(f); }
+    forests = forests.filter((g) => g.s1 > dist - 40);
+    const a = forests[0] || { s0: -1e6, s1: -1e6 }, b = forests[1] || { s0: -1e6, s1: -1e6 };
+    U.ash.value.set(a.s0, a.s1, b.s0, b.s1);
+  }
+  const FOREST = ['trunk', 'trunk', 'trunk', 'trunk', 'stump', 'stump', 'deadtree'];
+  function burntForest(s0, s1) {
+    const a = wp[wp.length - 1];
+    for (const f of forests) {
+      const lo = Math.max(s0, f.s0), hi = Math.min(s1, f.s1);
+      if (hi <= lo) continue;
+      const n = Math.round((hi - lo) * 100 / 24 * Q.density * (cfg.forest || 1));
+      for (let i = 0; i < n; i++) {
+        const s = rand(lo, hi), x = a.x + rand(-50, 50);
+        if (Math.abs(x - lane(s)) < cfg.lane) continue;    // the road keeps its lane through the trees
+        plant(Math.random() < 0.05 ? 'fallen' : pick(FOREST), x, s);
+      }
+    }
+  }
+
+  // now and then a big crater right where the vehicle is heading: too deep to drive through
+  function bigPit(s0, s1) {
+    const c = craters.slice(CR_RAND).find((k) => k.y < dist - 10);
+    if (!c) return;
+    const s = rand(s0 + (s1 - s0) * 0.75, s1 + 6), r = rand(3, 4.2);
+    const x = lane(s) + rand(-1.5, 1.5);
+    if (Math.abs(x) > cfg.limit - 8 || inCrater(x, s, r) ||
+      objects.some((o) => o.visible && Math.hypot(x - o.position.x, s - o.userData.s) < r * 1.4 + o.userData.w * 0.6)) return;
+    const o = take('pit');
+    if (!o) return;
+    c.set(x, s, r, r * rand(0.28, 0.34));
+    put(o, x, s, r * 1.1, 1);
+    o.userData.crater = c;
+    o.rotation.set(0, 0, 0);
+  }
+
+  // a defence belt across the track: two rows of dragon's teeth with wire in front, and a
+  // passage left open where the track goes through it
+  function defenceBelt(s0, s1) {
+    const a = wp[wp.length - 1], s = rand(s0 + 16, s1), tilt = rand(-0.15, 0.15), gap = lane(s) + rand(-1.5, 1.5);
+    for (let x = a.x - cfg.band * 0.85; x < a.x + cfg.band * 0.85; x += 4.6) {
+      if (Math.abs(x - gap) < 7) continue;
+      const ss = s + (x - a.x) * tilt;
+      const o = plant('teeth', x, ss);
+      if (o) { o.rotation.y = -Math.atan(tilt) + rand(-0.05, 0.05); syncInst(o); }
+      if (Math.random() < 0.3) plant('wire', x + rand(-1, 1), ss - 5);
+    }
+    // hedgehogs beside the passage
+    for (const side of [-1, 1]) if (Math.random() < 0.7) plant('hedgehog', gap + side * rand(8, 11), s + rand(-2, 2));
   }
 
   // the port crane stands on the left at mid distance, its jib turned towards the route
@@ -1248,22 +1972,46 @@
     if (o) { o.rotation.y = rand(-0.3, 0.3); syncInst(o); }
   }
 
+  // a chance given per planning step, scaled to the length of this one
+  let stepK = 1;
+  const per = (p) => Math.random() < p * stepK;
   function populate(s0, s1) {
     const area = (s1 - s0) * cfg.band * 2 * Q.density;
-    cfg.scatter.forEach(([type, per]) => {
-      for (let i = Math.floor(area / per + Math.random()); i > 0; i--) scatter(type, s0, s1);
+    stepK = (s1 - s0) / (cfg.segRef || (s1 - s0));
+    cfg.scatter.forEach(([type, m2]) => {
+      for (let i = Math.floor(area / m2 + Math.random()); i > 0; i--) scatter(type, s0, s1);
     });
     cfg.extras(s0, s1);
+    gateAt = -1e9;
+    gate(s0, s1);
+    if (cfg.obs) inPath(s0, s1);
   }
+
+  // the line the step being planned is expected to take (from its start towards its target);
+  // scattered objects keep off it, tree lines and belts leave their gap on it, and the
+  // obstacles meant to be driven round are put on it
+  let lane = (s) => wp[wp.length - 1].x, laneFrom = 0, laneReach = 10;
 
   function plan() {
     const a = wp[wp.length - 1], L = rand(cfg.seg[0], cfg.seg[1]), end = a.s + L;
-    populate(a.s, end);
     if (a.s > goalUntil) {
       goal = rand(-cfg.limit, cfg.limit);
       goalUntil = a.s + rand(100, 260);
       if (cfg.alts) prefY = rand(cfg.alts[0], cfg.alts[1]);
     }
+    // the point the step aims at: the goal, swung from side to side along a winding track
+    let target = goal;
+    if (cfg.meander) {
+      const [l0, l1, a0, a1] = cfg.meander, was = bend.phase;
+      bend.phase += Math.PI * 2 * L / bend.len;
+      if (Math.floor(was / Math.PI) !== Math.floor(bend.phase / Math.PI)) { bend.len = rand(l0, l1); bend.amp = rand(a0, a1); } // a new bend at each crossing
+      target = clamp(goal + bend.amp * Math.sin(bend.phase), -cfg.limit, cfg.limit);
+    }
+    const reach = cfg.slope * L / 1.875 * (cfg.agile || 1), cands = [];
+    const xEnd = clamp(target, a.x - reach * 0.7, a.x + reach * 0.7), vEnd = (xEnd - a.x) / L * 0.6;
+    laneFrom = a.x; laneReach = reach;
+    lane = (s) => (s <= end ? hermite(a.x, a.vx, xEnd, vEnd, L, clamp((s - a.s) / L, 0, 1), 0) : xEnd + vEnd * (s - end));
+    populate(a.s, end);
     const near = objects.filter((o) => o.visible && o.userData.s > a.s - 15 && o.userData.s < end + 25);
     // candidate altitudes: stay, cruise, or just high enough to hop over something ahead
     let ys = [a.y];
@@ -1272,32 +2020,40 @@
       ys = [a.y, prefY, cfg.alts[0], ...near.map((o) => o.userData.h + cfg.overfly + 0.4)]
         .filter((y) => y >= cfg.alts[0] && y <= cfg.alts[2] && Math.abs(y - a.y) <= climb);
     }
-    const reach = cfg.slope * L / 1.875, cands = [];
     for (let i = -12; i <= 12; i++) {
       const x = a.x + reach * i / 12;
       if (Math.abs(x) > cfg.limit) continue;
       for (const y of ys) {
         // leave the step still drifting the same way, a little slower, so the next one carries on smoothly
-        cands.push({ x, y, vx: (x - a.x) / L * 0.6, vy: (y - a.y) / L * 0.5, cost: Math.abs(x - goal) * 0.4 + Math.abs(x - a.x) * 0.6 + Math.abs(y - prefY) * 1.2 + (y - a.y > 0 ? (y - a.y) * 0.8 : 0) + Math.random() * 0.4 });
+        cands.push({ x, y, vx: (x - a.x) / L * 0.6, vy: (y - a.y) / L * 0.5, cost: Math.abs(x - target) * (cfg.meander ? 0.9 : 0.4) + Math.abs(x - a.x) * (cfg.meander ? 0.3 : 0.6) + Math.abs(y - prefY) * 1.2 + (y - a.y > 0 ? (y - a.y) * (cfg.meander ? 2.2 : 0.8) : 0) + Math.random() * 0.4 });
       }
     }
     cands.sort((p, q) => p.cost - q.cost);
     // walk the curve (and 8 m of straight line past its end, where the next step starts)
-    const blocked = (c, clearIt) => {
-      let hit = false;
+    // what stands on a candidate curve (and 8 m of straight line past its end, where the next step starts)
+    const blockers = (c, all) => {
+      const found = new Set();
       for (let s = a.s; s <= end + 8; s += 1.5) {
         const t = (s - a.s) / L, x = t > 1 ? c.x + c.vx * (s - end) : hermite(a.x, a.vx, c.x, c.vx, L, t, 0);
         const y = t > 1 ? c.y + c.vy * (s - end) : hermite(a.y, a.vy, c.y, c.vy, L, t, 0);
-        for (const o of near) {
-          if (!hits(o, x, y, s)) continue;
-          if (!clearIt) return true;
-          release(o); hit = true;
-        }
+        for (const o of near) if (hits(o, x, y, s)) { found.add(o); if (!all) return found; }
       }
-      return hit;
+      return found;
     };
-    let best = cands.find((c) => !blocked(c));
-    if (!best) { best = { x: a.x, y: a.y, vx: 0, vy: 0 }; blocked(best, true); } // boxed in: drop what is in the way
+    let best = cands.find((c) => !blockers(c).size);
+    if (!best) {
+      // boxed in: of the cheapest ways take the one blocked least and clear it. A big crater on it
+      // is filled in too; it lies far ahead, where the ground is still drawn flat (see crFade)
+      let fewest = Infinity;
+      for (const c of cands.slice(0, 12)) {
+        const n = blockers(c, true).size;
+        if (n < fewest) { fewest = n; best = c; }
+      }
+      blockers(best, true).forEach((o) => {
+        if (o.userData.crater) { o.userData.crater.set(0, -1e6, 1, 0); o.userData.crater = null; }
+        release(o);
+      });
+    }
     wp.push({ s: end, x: best.x, vx: best.vx, y: best.y, vy: best.vy });
   }
 
@@ -1312,6 +2068,7 @@
     wp.length = 0;
     wp.push({ s: dist - 10, x, vx: 0, y, vy: 0 }, { s: dist + 16, x, vx: 0, y, vy: 0 });
     goal = x; goalUntil = dist + rand(40, 120); prefY = y;
+    if (cfg.meander) Object.assign(bend, { phase: 0, len: rand(cfg.meander[0], cfg.meander[1]), amp: rand(cfg.meander[2], cfg.meander[3]) });
     extend();
   }
 
@@ -1330,25 +2087,25 @@
   let speed = cfg.speed, last = 0, raf = 0, visible = false;
   let vx = 0, ax = 0, roll = 0, poseDt = 1 / 60, agl = 0, W = 1, H = 1, tracked = 0;
   // ground colour by day / night, and the tint of dry patches
-  const GROUND = { air: [0x58693a, 0x232c26, [1.14, 1.05, 0.76]], ground: [0x45392b, 0x1f1a15, [1.12, 1.0, 0.86]] };
+  const GROUND = { air: [0x57533a, 0x201f19, [1.1, 1.0, 0.82]], ground: [0x45392b, 0x1f1a15, [1.12, 1.0, 0.86]] };
   function applyLook() {
     const sea = envName === 'sea';
     // a hazy, slightly desaturated day rather than a postcard blue
-    const horizon = day ? (sea ? 0xaebfc9 : 0xb3c1c8) : 0x131b30;
-    skyMat.uniforms.top.value.set(day ? 0x3f6c9e : 0x03050b);
+    const grey = true; // overcast, dust and smoke over the front, in every environment
+    const horizon = day ? (sea ? 0xa2a8a8 : 0xa7a9a6) : 0x10141f;
+    skyMat.uniforms.top.value.set(day ? (grey ? 0x6f7c88 : 0x3f6c9e) : 0x03050b);
     skyMat.uniforms.bottom.value.set(horizon);
     skyMat.uniforms.glowCol.value.set(day ? 0xffd6a0 : 0x141a2c);
     skyMat.uniforms.glowDir.value.copy(SKY_POS).normalize();
     scene.fog.color.set(horizon);
-    scene.fog.density = day ? 0.0095 : 0.015;
-    renderer.toneMappingExposure = day ? 0.8 : 1.2;
+    scene.fog.density = grey ? (day ? 0.0135 : 0.018) : day ? 0.0095 : 0.015;
+    renderer.toneMappingExposure = day ? (grey ? 0.85 : 0.8) : 1.2;
     hemi.color.set(day ? 0xc4d4e6 : 0x6c80d0);
     hemi.groundColor.set(day ? (sea ? 0x3a4a50 : 0x5a5644) : 0x07090d);
-    hemi.intensity = day ? 0.6 : 0.42;
-    sun.color.set(day ? 0xffe4c0 : 0xb4c4ff);
-    sun.intensity = day ? 1.3 : 0.5;
+    hemi.intensity = day ? (grey ? 0.8 : 0.6) : 0.42;      // under cloud the light comes from the whole sky,
+    sun.color.set(day ? (grey ? 0xe8e4dc : 0xffe4c0) : 0xb4c4ff);
+    sun.intensity = day ? (grey ? 0.55 : 1.3) : 0.5;        // the sun is a pale disc, shadows faint
     lightDir = LIGHT[day ? 'day' : 'night'];
-    head.intensity = day ? 0 : 1.7;
     mats.glass.emissiveIntensity = day ? 0 : 1.3;
     ground.visible = !sea;
     water.visible = sea;
@@ -1358,19 +2115,44 @@
       U.dry.value.set(...dry);
     }
     waterMat.color.set(0xffffff);
-    U.deep.value.set(day ? 0x082636 : 0x020b12);
-    U.shallow.value.set(day ? 0x1b5d68 : 0x082630);
-    U.foam.value.set(day ? 0xd8e2e4 : 0x5d6c78);
+    U.deep.value.set(day ? 0x141f1e : 0x03080a);               // murky grey-green, not a holiday blue
+    U.shallow.value.set(day ? 0x2c3a35 : 0x0b1517);
+    U.foam.value.set(day ? 0xb9bdb7 : 0x48525a);
     waterMat.envMap = SKY_ENV[day ? 'day' : 'night'];
     waterMat.envMapIntensity = day ? 0.65 : 0.8;
     waterMat.needsUpdate = true;
-    disc.visible = day;
-    disc.material.color.set(0xfff6e0);
-    halo.material.color.set(0x5a4630);
+    disc.visible = day && !grey;
+    disc.material.color.set(grey ? 0xd9d6cc : 0xfff6e0);
+    halo.material.color.set(grey ? 0x6a655c : 0x5a4630);
+    halo.visible = day;
+    farRings.forEach((m) => {
+      m.visible = !sea;
+      m.material.uniforms.uFog.value.set(horizon);
+      m.material.uniforms.uTone.value.set(day ? 0x4a4b46 : 0x05070c);
+    });
+    mistMat.uniforms.uCol.value.set(day ? (grey ? 0xbdbfbc : 0xd6dde0) : 0x2a3348);
+    mistMat.uniforms.uFog.value.set(horizon);
+    mistMat.uniforms.uFogD.value = scene.fog.density;
+    U.refl.value.set(horizon).multiplyScalar(day ? 0.95 : 0.7);
     moon.visible = moonHalo.visible = !day;
     stars.visible = !day;
     dustMat.color.set(day || sea ? 0xffffff : 0xfff0a0);
     dustMat.opacity = day ? 0.3 : sea ? 0.4 : 0.8;
+    const grd = true;
+    smokeMat.uniforms.uDark.value.set(day ? 0x2e2b28 : 0x0b0c0f);
+    smokeMat.uniforms.uLight.value.set(day ? 0x8f8a82 : 0x22252c);
+    smokeMat.uniforms.uFire.value.set(day ? 0x000000 : 0x9a3c10);
+    smokeMat.uniforms.uFog.value.copy(scene.fog.color);
+    smokeMat.uniforms.uFogD.value = scene.fog.density;
+    flameMat.uniforms.uFogD.value = scene.fog.density;
+    flameMat.uniforms.uGain.value = day ? 0.8 : 1.3;
+    flashes.forEach((f) => { f.visible = grd && !day; });
+    const cu = cloudMat.uniforms;
+    cu.uCover.value = CLOUD[envName][day ? 0 : 1];
+    cu.uLit.value.set(day ? (grd ? 0xb4b6b5 : 0xe8e8e4) : 0x1b2233);
+    cu.uShade.value.set(day ? (grd ? 0x5d6064 : 0x8a9098) : 0x0a0d14);
+    cu.uSunDir.value.copy(SKY_POS).normalize();
+    cu.uSunCol.value.set(day ? 0xffe2b0 : 0x55607a);
     modeEl.textContent = day ? 'SOLARNAV' : 'STARNAV';
     altBox.firstChild.textContent = sea ? 'SWELL ' : envName === 'ground' ? 'TILT ' : 'ALT ';
     altBox.lastChild.textContent = envName === 'ground' ? '°' : ' m';
@@ -1388,16 +2170,24 @@
     terrA = U.terrA.value = cfg.relief;
     bumpA = U.bump.value = cfg.bumps || 0;
     craters.forEach((c) => c.set(0, -1e6, 1, 0));
+    alongs = []; nextObs = 0; roadFrom = -1e9; forests = [];
+    U.ash.value.set(-1e6, -1e6, -1e6, -1e6);
+    U.roadOn.value = U.wet.value = name === 'ground' ? 1 : 0;
     fpsWarm = 2.5;
     loadModels(name);
-    if (name === 'ground') loadGrass();
+    if (name !== 'sea') loadGrass();
     objects.forEach((o) => { if (o.visible) release(o); });
     fields.forEach((f) => { if (f.visible) { f.visible = false; freeFields.push(f); } });
     vx = ax = roll = 0;
+    shakeFrom = dist;
     reset();
-    litter.visible = name === 'ground';
-    if (name === 'ground') {
-      craters.forEach((c) => spawnCrater(c, dist + 6, dist + DEPTH));
+    litter.visible = name !== 'sea';
+    LITTER.forEach(litterQuality);
+    smoke.visible = mist.visible = true;
+    banks.forEach((b, i) => spawnBank(b, dist + 25 + i * 30, dist + 60 + i * 30));
+    plumes.forEach((p, i) => spawnPlume(p, dist + 30 + i * 35, dist + 60 + i * 35));
+    if (name !== 'sea') {
+      craters.forEach((c, i) => { if (i < CR_RAND) spawnCrater(c, dist + 6, dist + DEPTH); });
       LITTER.forEach((K, k) => scatterLitter(k));
     }
     applyLook();
@@ -1413,18 +2203,45 @@
      locked on them) and the light swing round, and the camera leans a little into the turn. ----- */
   const Y_AXIS = new THREE.Vector3(0, 1, 0), lightNow = new THREE.Vector3();
   let heading = 0, yaw = 0;
+  /* shake: wheels running over a stone, a stick or scrap give the hull a kick (height, pitch,
+     roll) that a stiff, damped spring takes out again within a fraction of a second */
+  const shake = { y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0 };
+  let shakeFrom = 0;
+  function stepShake(dt) {
+    if (envName === 'ground') {
+      const s0 = shakeFrom, s1 = dist + 0.6;              // the front wheels are about 0.6 m ahead of the eye
+      LITTER.forEach((K) => {
+        if (!K.bump) return;
+        for (let i = 0; i < K.n; i++) {
+          if (K.s[i] <= s0 || K.s[i] > s1 || K.k[i] < 0.01) continue;
+          const lat = Math.abs(K.x[i] - pathX(K.s[i]));
+          if (lat > 1.15 || lat < 0.45) continue;          // only what passes under a wheel, not between them
+          const kick = K.bump * K.k[i];
+          shake.vy += kick * 6;
+          shake.vp -= kick * 1.6;
+          shake.vr += kick * (K.x[i] > pathX(K.s[i]) ? -1 : 1) * 3;
+        }
+      });
+      shakeFrom = s1;
+    }
+    for (const k of ['y', 'p', 'r']) {                     // spring back
+      shake['v' + k] += (-260 * shake[k] - 16 * shake['v' + k]) * dt;
+      shake[k] += shake['v' + k] * dt;
+    }
+  }
   function steerCourse(dt) {
     const target = clamp((goal - camera.position.x) / 90, -0.7, 0.7);
     const turn = (target - heading) * (1 - Math.exp(-dt * 0.35));
     heading += turn;
-    yaw += (clamp(turn / dt * 1.5, -0.2, 0.2) - yaw) * (1 - Math.exp(-dt * 2)); // looks into the turn
+    const look = envName === 'air' ? 0.1 : 0.2;
+    yaw += (clamp(turn / dt * 1.5, -look, look) - yaw) * (1 - Math.exp(-dt * 1.5)); // looks into the turn
     skyGroup.rotation.y = heading;
   }
 
   /* ----- motion ----- */
   // place the camera for the current distance; each platform moves in its own way
   function pose() {
-    const x = pathX(dist), gy = terrainH(x, dist);
+    const x = pathX(dist), gy = envName === 'air' ? reliefH(x, dist) : terrainH(x, dist);
     vx = route(dist, 1) * speed;
     ax = route(dist, 2) * speed * speed;
     let y = gy + (cfg.alt || 0), pitch = 0, tilt = 0, down = 0.3, look = 0;
@@ -1432,7 +2249,7 @@
       agl = pathY(dist) + Math.sin(time * 0.4) * 0.12;
       y = gy + agl;
       look = route(dist, 1, 'y') * 30 * 0.7;               // eyes follow the climb or the descent
-      tilt = -Math.atan(ax / 9.81);                        // banks into the turn
+      tilt = -Math.atan(ax / 9.81) * 0.6;                  // banks into the turn (gently: the view stays readable)
       down = 0.3 + agl * 0.04;                             // looks further down from higher up
     } else if (envName === 'sea') {
       y += wave(x, dist, time);                            // heaves, pitches and rolls with the swell
@@ -1446,13 +2263,14 @@
       pitch = Math.atan((terrainH(x, dist + 2) - terrainH(x, dist - 2)) / 4) + Math.sin(dist * 1.7) * 0.012;
       tilt = Math.atan((terrainH(x + 1.2, dist) - terrainH(x - 1.2, dist)) / 2.4) + Math.sin(dist * 0.9) * 0.015 + Math.sin(dist * 2.3) * 0.008;
       down = 0.08;
+      y += shake.y; pitch += shake.p;
     }
-    roll += (tilt - roll) * (1 - Math.exp(-poseDt * 2.2)); // eases into the bank instead of snapping
+    roll += (tilt - roll) * (1 - Math.exp(-poseDt * (envName === 'air' ? 1.4 : 2.2))); // eases into the bank instead of snapping
     camera.position.set(x, y, 0);
     camera.lookAt(x + vx / speed * 30, y - down + look, -30);
     camera.rotateY(-yaw);
     camera.rotateX(pitch);
-    camera.rotateZ(roll);
+    camera.rotateZ(roll + (envName === 'ground' ? shake.r : 0));
     if (envName === 'ground') agl = Math.abs(roll * 57.3);
     return y;
   }
@@ -1464,6 +2282,7 @@
     extend();
     poseDt = dt;
     steerCourse(dt);
+    stepShake(dt);
     const y = pose(), cx = camera.position.x;
     const sea = envName === 'sea';
     U.dist.value = dist;
@@ -1473,7 +2292,13 @@
     skyGroup.position.x = cx;
     snapGround(cx);
     instRoot.position.z = dist;
-    if (envName === 'ground') updateLitter();
+    if (envName !== 'sea') updateLitter();
+    if (envName === 'ground') updateRoad();
+    updateSmoke();
+    if (!day) updateFlashes(dt);
+    updateClouds(dt);
+    updateDrops(dt);
+    if (mist.visible) updateMist();
     sun.target.position.set(cx, y - 3, -28);
     sun.position.copy(lightNow.copy(lightDir).applyAxisAngle(Y_AXIS, heading)).multiplyScalar(70).add(sun.target.position);
     if (sea) {
@@ -1521,8 +2346,61 @@
     return v.z > 1 ? null : [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H];
   };
 
+  /* ----- spray on the lens at sea: now and then a drop lands on the camera window, clings for a
+     moment, then runs down leaving a faint wet trail. Drawn on the HUD canvas, kept subtle. ----- */
+  const drops = [];
+  let dropNext = 3;
+  function updateDrops(dt) {
+    if (envName !== 'sea') { drops.length = 0; return; }
+    if ((dropNext -= dt) < 0) {
+      for (let n = Math.random() < 0.3 ? 2 : 1; n > 0; n--) {
+        drops.push({ x: rand(0.06, 0.94) * W, y: rand(0.05, 0.6) * H, r: rand(3.5, 9), age: 0, hold: rand(0.6, 2.2), vy: 0, trail: [] });
+      }
+      dropNext = rand(3, 8);
+    }
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.age += dt;
+      if (d.age > d.hold) {                                 // it lets go and runs down, wobbling a little
+        d.vy = Math.min(d.vy + 90 * dt, 70);
+        d.y += d.vy * dt;
+        d.x += Math.sin(d.age * 3 + d.r) * 6 * dt;
+        d.r = Math.max(1.5, d.r - dt * 0.8);
+        const last = d.trail[d.trail.length - 1];
+        if (!last || d.y - last[1] > 3) d.trail.push([d.x, d.y - d.r * 0.6]);
+        if (d.trail.length > 16) d.trail.shift();           // the streak dries from the top
+      }
+      if (d.y - d.r > H || d.age > d.hold + 3) drops.splice(i, 1);
+    }
+  }
+  function drawDrops() {
+    for (const d of drops) {
+      const fade = clamp(Math.min(d.age * 6, d.hold + 3 - d.age), 0, 1);
+      if (d.trail.length > 1) {                             // the wet streak it leaves, drying from the top
+        h2.lineWidth = Math.max(1, d.r * 0.5);
+        h2.lineCap = 'round';
+        for (let k = 1; k < d.trail.length; k++) {
+          h2.strokeStyle = `rgba(220,230,235,${0.07 * fade * k / d.trail.length})`;
+          h2.beginPath(); h2.moveTo(d.trail[k - 1][0], d.trail[k - 1][1]); h2.lineTo(d.trail[k][0], d.trail[k][1]); h2.stroke();
+        }
+      }
+      // the drop: a clear lens, darker rim at the bottom, a highlight at the top
+      const g = h2.createRadialGradient(d.x, d.y - d.r * 0.2, d.r * 0.2, d.x, d.y, d.r);
+      g.addColorStop(0, `rgba(255,255,255,${0.05 * fade})`);
+      g.addColorStop(0.75, `rgba(200,210,215,${0.1 * fade})`);
+      g.addColorStop(1, `rgba(20,25,30,${0.22 * fade})`);
+      h2.fillStyle = g;
+      h2.beginPath(); h2.ellipse(d.x, d.y, d.r * 0.9, d.r, 0, 0, Math.PI * 2); h2.fill();
+      h2.fillStyle = `rgba(255,255,255,${0.4 * fade})`;
+      h2.beginPath(); h2.arc(d.x - d.r * 0.3, d.y - d.r * 0.4, Math.max(0.8, d.r * 0.18), 0, Math.PI * 2); h2.fill();
+    }
+    h2.lineCap = 'butt';
+  }
+
   function drawHud() {
     h2.clearRect(0, 0, W, H);
+    h2.globalAlpha = 1;
+    drawDrops();
     h2.font = '10px "JetBrains Mono", ui-monospace, monospace';
     h2.lineWidth = 1;
     const cx = W / 2, cy = H / 2;
@@ -1559,10 +2437,11 @@
 
     // detections
     tracked = 0;
+    const labels = [];
     for (const o of objects) {
       if (!o.visible) continue;
       const u = o.userData, d = -o.position.z;
-      if (d < 3 || d > 95) continue;
+      if (d < 3 || d > 95 || (u.crater && d > CR_FAR - 4)) continue; // a big crater is marked once it is dug (crFade)
       const a = toScreen(o.position.x - u.w, o.position.y, o.position.z);
       const b = toScreen(o.position.x + u.w, o.position.y + u.h, o.position.z);
       if (!a || !b) continue;
@@ -1574,6 +2453,7 @@
       const lat = Math.abs(o.position.x - pathX(u.s));
       const over = !!cfg.overfly && lat < u.w + cfg.margin && pathY(u.s) >= u.h + cfg.overfly;
       const threat = !over && lat < u.w + cfg.margin + 2.5;
+      if (u.cls.quiet && !threat) continue; // a tree line is not a hundred targets: only trees by the track get a box
       const col = threat ? colors.accent : colors.ink;
       h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
       h2.strokeStyle = h2.fillStyle = col;
@@ -1587,10 +2467,22 @@
       h2.stroke();
       if (x1 - x0 > 26 && (threat || over || (d < 45 && x1 - x0 > 40))) { // text only where it matters, or the view drowns in labels
         const conf = Math.min(0.99, u.conf + (1 - d / 95) * 0.08);
-        const action = over ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
-        h2.fillText(`${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, Math.max(4, x0), Math.max(12, y0 - 16));
-        h2.fillText(action, Math.max(4, x0), Math.max(24, y0 - 5));
+        labels.push({ d, x: Math.max(4, x0), y: Math.max(12, y0 - 16), col, alpha: h2.globalAlpha, rank: threat || over ? 0 : 1,
+          text: `${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, action: over ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK' });
       }
+    }
+
+    // labels: the nearest threats first, at most five, none written over another
+    labels.sort((p, q) => p.rank - q.rank || p.d - q.d);
+    const shown = [];
+    for (const l of labels) {
+      if (shown.length === 5) break;
+      if (shown.some((m) => Math.abs(m.x - l.x) < 150 && Math.abs(m.y - l.y) < 24)) continue;
+      shown.push(l);
+      h2.globalAlpha = l.alpha;
+      h2.fillStyle = l.col;
+      h2.fillText(l.text, l.x, l.y);
+      h2.fillText(l.action, l.x, Math.max(24, l.y + 11));
     }
 
     // boresight

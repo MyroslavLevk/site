@@ -45,7 +45,7 @@
   const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 600);
   scene.add(camera);
 
-  /* ----- light: sun / moon with shadows, sky fill, onboard headlight for night ----- */
+  /* ----- light: sun / moon with shadows, sky fill (no onboard light: the platform runs dark) ----- */
   const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
   sun.position.set(-30, 45, 5);
@@ -56,9 +56,6 @@
   sun.shadow.mapSize.set(Q.shadow || 1024, Q.shadow || 1024);
   Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 140 });
   sun.shadow.bias = -0.0006;
-  const head = new THREE.SpotLight(0xfff2d0, 0, 90, 0.55, 0.7, 1.4);
-  head.target.position.set(0, -0.15, -10);
-  camera.add(head, head.target);
   scene.add(hemi, sun, sun.target);
 
   /* ----- sky dome: vertical gradient, haze at the horizon and a glow around the sun / moon.
@@ -181,7 +178,7 @@
   farRings.forEach((m) => skyGroup.add(m));
 
   // look of the clouds per environment: [cover threshold by day, at night] - lower = more cloud
-  const CLOUD = { air: [0.56, 0.6], sea: [0.52, 0.58], ground: [0.3, 0.4] }; // overcast over the front
+  const CLOUD = { air: [0.32, 0.42], sea: [0.32, 0.42], ground: [0.3, 0.4] }; // overcast over the front
 
   /* ----- stars, sun, moon ----- */
   const starField = (n, size) => {
@@ -276,9 +273,11 @@
   const crFade = (s) => { const t = clamp((CR_FAR - (s - dist)) / (CR_FAR - CR_NEAR), 0, 1); return t * t * (3 - 2 * t); };
   const craters = Array.from({ length: CR_N }, () => new THREE.Vector4(0, -1e6, 1, 0)); // x, s, radius, depth
   // full = craters at their final depth whatever the distance (used to stand objects)
+  // the lie of the land alone: what a drone holds its height over (it does not drop into every crater)
+  const reliefH = (x, s) => terrA * (0.55 * Math.sin(0.021 * x + 0.6) * Math.sin(0.017 * s + 1.1)
+    + 0.3 * Math.sin(0.047 * x - 0.033 * s + 2) + 0.15 * Math.sin(0.09 * x + 0.071 * s));
   const terrainH = (x, s, full) => {
-    let h = terrA * (0.55 * Math.sin(0.021 * x + 0.6) * Math.sin(0.017 * s + 1.1)
-      + 0.3 * Math.sin(0.047 * x - 0.033 * s + 2) + 0.15 * Math.sin(0.09 * x + 0.071 * s));
+    let h = reliefH(x, s);
     if (!bumpA) return h;
     const f = full ? 1 : crFade(s);
     if (!f) return h;
@@ -309,7 +308,7 @@
   const U = {
     dist: { value: 0 }, time: { value: 0 }, terrA: { value: 0 }, amp: { value: 1 }, bump: { value: 0 }, cr: { value: craters },
     dry: { value: new THREE.Vector3(1, 1, 1) }, roadS0: { value: 0 }, roadOn: { value: 0 },
-    ash: { value: new THREE.Vector4(-1e6, -1e6, -1e6, -1e6) }, refl: { value: new THREE.Color() },
+    ash: { value: new THREE.Vector4(-1e6, -1e6, -1e6, -1e6) }, refl: { value: new THREE.Color() }, wet: { value: 1 },
     deep: { value: new THREE.Color() }, shallow: { value: new THREE.Color() }, foam: { value: new THREE.Color() },
   };
 
@@ -378,7 +377,7 @@
   const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 });
   groundMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uDist: U.dist, uTerrA: U.terrA, uBump: U.bump, uCr: U.cr, uDry: U.dry, uMacro: { value: macroTex },
-      uRoad: { value: roadTex }, uRoadS0: U.roadS0, uRoadOn: U.roadOn, uAsh: U.ash, uRefl: U.refl });
+      uRoad: { value: roadTex }, uRoadS0: U.roadS0, uRoadOn: U.roadOn, uAsh: U.ash, uRefl: U.refl, uWet: U.wet });
     sh.vertexShader = 'uniform float uDist; varying vec2 vW;\n' + TERRAIN_GLSL + '\n' + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `
         vec4 wp0 = modelMatrix * vec4(position, 1.0);
@@ -387,7 +386,7 @@
         vec3 objectNormal = normalize(vec3((th - terrainH(P + vec2(0.5, 0.0))) * 2.0, 1.0, (terrainH(P + vec2(0.0, 0.5)) - th) * 2.0));
         vW = P;`)
       .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, th, position.z);');
-    sh.fragmentShader = `uniform sampler2D uMacro; uniform vec3 uDry; uniform float uBump; uniform vec4 uCr[${CR_N}]; varying vec2 vW; uniform vec4 uAsh; uniform vec3 uRefl;\n${ROAD_GLSL}\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform sampler2D uMacro; uniform vec3 uDry; uniform float uBump; uniform vec4 uCr[${CR_N}]; varying vec2 vW; uniform vec4 uAsh; uniform vec3 uRefl; uniform float uWet;\n${ROAD_GLSL}\n` + sh.fragmentShader
       .replace('#include <map_fragment>', `
         vec3 det = texture2D(map, vW / ${TILE}.0).rgb;
         float mac = texture2D(uMacro, vW / 170.0).r, mac2 = texture2D(uMacro, vW / 53.0 + 0.37).r;
@@ -402,7 +401,7 @@
         }
         if (uBump > 0.0) {
           // puddles in low spots of the field, and grey ash where the forest burnt
-          puddle = max(puddle, smoothstep(0.66, 0.7, texture2D(uMacro, vW / vec2(29.0, 41.0) + 0.43).r) * 0.95);
+          puddle = max(puddle, smoothstep(0.66, 0.7, texture2D(uMacro, vW / vec2(29.0, 41.0) + 0.43).r) * 0.95 * uWet);
           float ash = max(smoothstep(uAsh.x - 15.0, uAsh.x + 10.0, vW.y) * (1.0 - smoothstep(uAsh.y - 10.0, uAsh.y + 15.0, vW.y)),
                           smoothstep(uAsh.z - 15.0, uAsh.z + 10.0, vW.y) * (1.0 - smoothstep(uAsh.w - 10.0, uAsh.w + 15.0, vW.y)));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))) * vec3(0.62, 0.6, 0.6), ash * 0.85);
@@ -539,7 +538,7 @@
     t.dispose();
     return env;
   };
-  const SKY_ENV = { day: skyEnv('#4f78a6', '#9fb1bd', '#173a46'), night: skyEnv('#04060d', '#1d2b4c', '#050a10') };
+  const SKY_ENV = { day: skyEnv('#77848d', '#a6a9a7', '#232c2a'), night: skyEnv('#04060d', '#1d2b4c', '#050a10') }; // an overcast sky
   const waterMat = new THREE.MeshStandardMaterial({
     roughness: 0.16, metalness: 0,
     normalMap: rippleTex, normalScale: new THREE.Vector2(0.22, 0.22),
@@ -592,8 +591,8 @@
     // sea
     wood: std(0x9a7a4e),
     rust: std(0x8a4b2a, { roughness: 0.8 }),
-    buoy: std(0xc8372d, { roughness: 0.6 }),
-    boxes: [0x2f6f9f, 0xb5452e, 0x3d7d4a, 0xc9a23a].map((c) => std(c, { roughness: 0.7 })),
+    buoy: std(0x7d3a30, { roughness: 0.6 }),
+    boxes: [0x4a5a4e, 0x6b4a3a, 0x55554a, 0x5e5240].map((c) => std(c, { roughness: 0.75 })),
     concrete: std(0x9a9a96),
     hull: std(0x2b3038, { roughness: 0.6 }),
     // ground
@@ -603,6 +602,8 @@
     timber: std(0x5c4630),
     deadwood: std(0x4a4038),
     charred: std(0x3a3029),
+    mine: std(0x3b2f27, { roughness: 0.8 }),
+    boomFloat: std(0x5c5f58, { roughness: 0.7 }),
     soot: std(0x1e1916), // burnt forest
     mud: std(0x4a3d2e, { flatShading: true }),
     plaster: [0x7e786d, 0x6d685f, 0x857c6e].map((c) => std(c)),
@@ -660,6 +661,9 @@
     splinter: new THREE.ConeGeometry(0.07, 0.6, 4),
     tooth: new THREE.CylinderGeometry(0.22, 0.85, 1.1, 4, 1),
     tyre: new THREE.TorusGeometry(0.38, 0.13, 6, 12).rotateX(Math.PI / 2),
+    mineBody: new THREE.SphereGeometry(0.5, 12, 8),
+    horn: new THREE.CylinderGeometry(0.04, 0.06, 0.28, 6),
+    drum: new THREE.CylinderGeometry(0.32, 0.32, 1, 10).rotateZ(Math.PI / 2),
     tallTrunk: rough(new THREE.CylinderGeometry(0.1, 0.2, 1, 6, 5), 0.02, 12),
     coil: new THREE.TorusGeometry(0.45, 0.03, 5, 12).rotateY(Math.PI / 2),
     mound: rough(new THREE.SphereGeometry(4, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.9, 4),
@@ -776,12 +780,20 @@
       part(t, geo.box, mats.trim, 0, 5.6, 16, 4.6, 5, 7);
       part(t, geo.box, mats.glass, 0, 6.8, 12.46, 4, 1, 0.08);
       part(t, geo.box, mats.dark, 0, 9.2, 17, 1.2, 2.4, 1.6);
-      [-14, 14].forEach((z) => {                                  // quay lamps
-        part(t, geo.pole, mats.steel, 6, 5, z, 1.5, 6, 1.5);
-        const lamp = glow(0xffd9a0, 5);
-        lamp.position.set(6, 8.2, z);
-        t.add(lamp);
+      [-14, 14].forEach((z) => part(t, geo.pole, mats.steel, 6, 5, z, 1.5, 6, 1.5)); // quay lamp posts, dark: blackout
+      for (let i = 0; i < 6; i++) part(t, geo.box, mats.charred, rand(5, 13), 2.2, rand(-20, 20), rand(1, 3), 0.3, 0.4).rotation.y = rand(0, 3); // burnt wreckage on the quay
+    } },
+    // a warehouse on a pier, shelled: walls standing, the roof half fallen in, scorched
+    warehouse: { label: 'WAREHOUSE', w: 7, h: 6, far: true, fixed: true, sink: 0, build(t) {
+      part(t, geo.box, mats.concrete, 0, -0.6, 0, 12, 1.6, 18);                           // the pier it stands on
+      [[-5, 0, 0.4, 16], [5, 0, 0.4, 16], [0, -8, 10, 0.4], [0, 8, 10, 0.4]].forEach(([x, z, w, d], i) => {
+        part(t, geo.box, i === 2 ? mats.burnt : pick(mats.plaster), x, 2.4, z, w, 4.8 - (i === 1 ? 1.6 : 0), d);
       });
+      part(t, geo.box, mats.dark, 0, 1.6, 8.05, 4, 3.2, 0.1);                             // the door, blown in
+      for (let k = 0; k < 4; k++) if (k !== 1 && k !== 2) roof(t, mats.barnRoof, 0, 4.8, 10, 4, 1.6).position.z = -6 + k * 4;
+      const fallen = part(t, geo.box, mats.barnRoof, 0, 2, 0, 9, 0.15, 7);              // and what came down
+      fallen.rotation.x = 0.5;
+      part(t, geo.mound, mats.earth, 2, 0, -2, 0.5, 0.2, 0.4);
     } },
     // Sokol portal crane on the quay; a single one, always on the left (see placeCrane)
     crane: { label: 'PORT CRANE', w: 10, h: 34, max: 1, far: true, fixed: true, build(t) {
@@ -911,6 +923,24 @@
       part(t, geo.box, mats.tarp, 0, 2.42, 0.1, 3.8, 0.06, 3.2).rotation.x = 0.08;                                // net / roof
       for (let i = 0; i < 4; i++) part(t, geo.tyre, mats.tyre, 2.6, 0.12 + i * 0.24, 0.6);
     } },
+    /* --- sea on the front --- */
+    // a moored contact mine: a rusty sphere with horns, riding the swell
+    mine: { label: 'SEA MINE', w: 1.1, h: 0.9, float: true, fixed: true, build(t) {
+      part(t, geo.mineBody, mats.mine, 0, 0.3, 0);
+      [[0, 1, 0], [0.8, 0.5, 0], [-0.8, 0.5, 0], [0, 0.5, 0.8], [0, 0.5, -0.8], [0.55, 0.85, 0.55], [-0.55, 0.85, -0.55]].forEach(([x, y, z]) => {
+        const h = part(t, geo.horn, mats.dark, x * 0.5, 0.3 + (y - 0.5) * 0.6 + 0.1, z * 0.5);
+        h.lookAt(x * 10, 0.3 + (y - 0.5) * 6 + 1, z * 10); h.rotateX(Math.PI / 2);
+      });
+    } },
+    // a floating boom: a string of drums on a cable, laid across the water to stop boats
+    boom: { label: 'BOOM', w: 3.2, h: 0.6, float: true, fixed: true, across: true, sink: 0.2, build(t) {
+      for (let i = 0; i < 6; i++) part(t, geo.drum, i % 2 ? mats.mine : mats.boomFloat, -3 + i * 1.2, 0.15, 0);
+      part(t, geo.box, mats.dark, 0, 0.32, 0, 7.4, 0.05, 0.05);
+    } },
+    // half-sunk burnt boat (placeholder until the model loads)
+    hulk: { label: 'SUNKEN BOAT', w: 2.6, h: 1.4, float: true, sink: 0.45, build(t) {
+      part(t, geo.box, mats.burnt, 0, 0.2, 0, 2.2, 1, 5).rotation.z = 0.2;
+    } },
     // a big shell crater on the track: the dent is in the terrain (a crater of the pool); this
     // invisible stand-in lets the planner steer round it and the HUD mark it
     pit: { label: 'LARGE CRATER', w: 1, h: 0.25, build() {} },
@@ -953,68 +983,91 @@
      seg = length of one planning step; scatter = [class, square metres per object];
      alts = drone altitude above ground [lowest, highest cruise, highest climb], climb = steepest dy/ds;
      overfly = clearance needed to pass over an object instead of around it. ----- */
+  /* Every platform weaves: its track is a snake (cfg.meander: wavelength and amplitude ranges,
+     a new bend chosen at every crossing) laid over a goal that wanders across the strip, and
+     obstacles are put on the line it is about to take (cfg.obs: spacing and kinds) so that it has
+     to steer round them, showing off the onboard avoidance the module is for. Now and then a gate
+     (cfg.gate) bars the way: a row of obstacles across the whole reach of a step with one gap,
+     `shift` metres off to one side, just wide enough (`slack` metres to spare each way), which the
+     planner has to find.
+     lane = scattered things keep this far off that line, leaving room to swerve;
+     agile = sideways reach of a planning step, times the usual; segRef = the step length the
+     per-step chances of the extras were tuned for (see per). */
   const ENV = {
+    // the front from a low-flying drone: shell-pocked fields burnt or gone to weed between tree
+    // lines, wrecked farms, burnt-out vehicles, broken pylons, now and then a burnt forest
     air: {
-      speed: 17, margin: 1.8, band: 85, limit: 70, slope: 0.32, seg: [40, 60], relief: 3,
+      speed: 17, margin: 1.8, band: 72, limit: 62, slope: 0.5, seg: [30, 42], segRef: 50, relief: 3, bumps: 0.12,
+      litter: 0.4, forest: 0.4, rows: 1.6, // lighter than the ground: share of litter, density of burnt forest, spacing in tree lines
       alts: [2.6, 7, 15], climb: 0.2, overfly: 1.5,
-      scatter: [['pine', 330], ['tree', 900], ['rock', 900], ['hay', 1000]],
+      meander: [120, 170, 12, 18], lane: 6, agile: 1.5,
+      obs: { every: [16, 28], kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine', 'stump', 'mast'] },
+      gate: { chance: 0.5, kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine'], step: 5.5, slack: 1.4, shift: [5, 11], span: 26 },
+      scatter: [['deadtree', 900], ['stump', 1600], ['tree', 2600], ['pine', 3200], ['crater', 2600], ['hedgehog', 5000]],
       extras(s0, s1) {
-        for (let k = 0; k < 2; k++) {
-          if (Math.random() < 0.4) {
-            scatter('house', s0, s1);
-            if (Math.random() < 0.6) scatter('barn', s0, s1);
-            if (Math.random() < 0.5) scatter('silo', s0, s1);
-          }
-          if (Math.random() < 0.12) scatter('mast', s0, s1);
-          if (Math.random() < 0.15) scatter('windmill', s0, s1);
-          if (freeFields.length && Math.random() < 0.75) placeField(s0, s1);
-        }
+        planForests(s1 + 50);
+        burntForest(s0, s1);
+        treeLines(s0, s1);
+        if (per(0.25)) ruins(s0, s1);
+        if (per(0.35)) scatter('wreck', s0, s1);
+        if (per(0.25)) scatter('truck', s0, s1);
+        if (per(0.1)) defenceBelt(s0, s1);
+        if (per(0.15)) scatter('mast', s0, s1);
+        for (let k = 0; k < 2; k++) if (freeFields.length && per(0.6)) placeField(s0, s1);
       },
     },
+    // a contested coast: grey water, mines and booms, burnt and sunken boats, a shelled port
     sea: {
-      alt: 1.7, speed: 10, margin: 1.6, band: 85, limit: 70, slope: 0.26, seg: [36, 52], relief: 0,
+      alt: 1.7, speed: 10, margin: 1.6, band: 85, limit: 70, slope: 0.6, seg: [26, 36], segRef: 44, relief: 0,
+      meander: [90, 140, 8, 14], lane: 6, agile: 1.5,
       // two locations: open water with a heavy swell, and the sheltered approach to a port
       locs: {
         open: {
           amp: 1,
-          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['buoy', 2600], ['boat', 2400], ['container', 3200]],
+          obs: { every: [14, 24], kinds: ['mine', 'mine', 'mine', 'buoy', 'hulk', 'hulk', 'debris', 'log', 'barrel', 'boat'] },
+          gate: { chance: 0.35, kinds: ['boom', 'boom', 'boom', 'mine', 'mine'], step: 4.5, slack: 1.3, shift: [4, 9], span: 22 },
+          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['mine', 2000], ['hulk', 2600], ['buoy', 3200], ['boat', 4000], ['container', 4000]],
           extras(s0, s1) {
-            if (Math.random() < 0.25) scatter('cargoship', s0, s1);
-            if (Math.random() < 0.12) scatter('lighthouse', s0, s1);
+            if (per(0.2)) scatter('cargoship', s0, s1);
+            if (per(0.1)) scatter('lighthouse', s0, s1);
           },
         },
         port: {
           amp: 0.35,
-          scatter: [['buoy', 1200], ['boat', 1300], ['container', 1900], ['debris', 1700], ['barrel', 1900]],
+          obs: { every: [14, 22], kinds: ['mine', 'mine', 'buoy', 'hulk', 'hulk', 'boat', 'container', 'debris'] },
+          gate: { chance: 0.4, kinds: ['boom', 'boom', 'boom', 'hulk', 'container'], step: 5, slack: 1.3, shift: [4, 9], span: 22 },
+          plumes: 8,
+          scatter: [['hulk', 1100], ['boat', 1800], ['container', 1700], ['debris', 1300], ['barrel', 1700], ['mine', 2600], ['buoy', 2600]],
           extras(s0, s1) {
-            if (Math.random() < 0.5) placeCrane(s0, s1);
-            if (Math.random() < 0.6) scatter('port', s0, s1);
-            if (Math.random() < 0.7) scatter('cargoship', s0, s1);
-            if (Math.random() < 0.6) scatter('dock', s0, s1);
-            if (Math.random() < 0.2) scatter('lighthouse', s0, s1);
+            if (per(0.5)) placeCrane(s0, s1);
+            if (per(0.6)) scatter('port', s0, s1);
+            if (per(0.45)) scatter('warehouse', s0, s1);
+            if (per(0.6)) scatter('cargoship', s0, s1);
+            if (per(0.6)) scatter('dock', s0, s1);
+            if (per(0.15)) scatter('lighthouse', s0, s1);
           },
         },
       },
     },
+
     // the grey zone of today's front: open fields between shelled tree lines, positions dug
     // into those tree lines, belts of dragon's teeth and wire, burnt-out vehicles, no one in the open
     ground: {
-      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.36, seg: [28, 40], relief: 1.4, bumps: 0.16, even: 4,
-      meander: [120, 200, 5, 9], // wavelength and amplitude ranges, m
-      lane: 6,                   // scattered things keep this far off the line a step is planned along
-      agile: 1.5,                // sideways reach of a step, times the usual
+      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.5, seg: [20, 28], segRef: 34, relief: 1.4, bumps: 0.16, even: 4,
+      meander: [80, 120, 6, 9], lane: 6, agile: 1.5, lines: 0.6, // tree lines: chance of one across per step
+      obs: { every: [10, 20], kinds: ['stump', 'stump', 'deadtree', 'crater', 'crater', 'hedgehog', 'hedgehog', 'hedgehog', 'sandbags', 'sandbags', 'block', 'wire', 'wreck', 'truck'] },
+      gate: { chance: 0.35, kinds: ['hedgehog', 'hedgehog', 'block', 'stump', 'sandbags'], step: 3.2, slack: 1, shift: [3, 7], span: 16 },
       scatter: [['deadtree', 400], ['stump', 460], ['crater', 950], ['hedgehog', 800], ['sandbags', 1300], ['wire', 3000], ['block', 3400]],
       extras(s0, s1) {
         planForests(s1 + 50);
         burntForest(s0, s1);
         treeLines(s0, s1);
-        if (Math.random() < 0.2) bigPit(s0, s1);
-        inPath(s0, s1);
-        if (Math.random() < 0.12) ruins(s0, s1);
-        if (Math.random() < 0.07) checkpoint(s0, s1);
-        if (Math.random() < 0.13) defenceBelt(s0, s1);
-        if (Math.random() < 0.4) scatter('wreck', s0, s1);
-        if (Math.random() < 0.3) scatter('truck', s0, s1);
+        if (per(0.2)) bigPit(s0, s1);
+        if (per(0.12)) ruins(s0, s1);
+        if (per(0.07)) checkpoint(s0, s1);
+        if (per(0.13)) defenceBelt(s0, s1);
+        if (per(0.4)) scatter('wreck', s0, s1);
+        if (per(0.3)) scatter('truck', s0, s1);
       },
     },
   };
@@ -1106,36 +1159,35 @@
      loaded, every pooled object of that class swaps to a real model.
      fit = which dimension is matched to the class: 'h' height, 'w' footprint.
      set = the file holds several models side by side (five trees), used one by one. ----- */
+  const BURNT_TONE = [0.25, [1.25, 1, 0.8]];
   const MODELS = {
-    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'] },
-    tree: { env: 'air', fit: 'h', set: true, files: ['trees/pack01'] },
-    rock: { env: 'air', fit: 'w', files: ['rock_largeA', 'rock_largeC', 'rock_largeE', 'stone_largeB'] },
-    log: { env: 'sea', fit: 'w', files: ['log_large', 'log'] },
-    buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'] },
-    container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'] },
+    // tone: the toy-bright kits dulled to the greys and rust of the front (see prepare)
+    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'], tone: [0.8, 0.55, [0.95, 0.95, 0.9]] },
+    tree: { env: 'air', fit: 'h', set: true, files: ['trees/pack01'], tone: [0.8, 0.5, [1, 0.95, 0.85]] },
+    log: { env: 'sea', fit: 'w', files: ['log_large', 'log'], tone: [0.35, 0.4, [1, 0.92, 0.85]] },
+    buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'], tone: [0.7, 0.35, [1, 0.95, 0.9]] },
+    container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'], tone: [0.55, 0.2, [1.2, 1, 0.85]] },
     barrel: { env: 'sea', fit: 'w', files: ['pirate/barrel'] },
-    debris: { env: 'sea', fit: 'w', files: ['pirate/crate', 'survival/box-large'] },
-    boat: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small', 'watercraft/boat-speed-a'] },
-    cargoship: { env: 'sea', fit: 'w', files: ['watercraft/ship-cargo-a', 'watercraft/ship-cargo-b', 'watercraft/ship-cargo-c'] },
-    deadtree: { env: 'ground', fit: 'h', set: true, files: ['trees/dead'] },
-    barricade: { env: 'ground', fit: 'w', files: ['survival/fence-fortified'] },
-    supply: { env: 'ground', fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
+    debris: { env: 'sea', fit: 'w', files: ['pirate/crate', 'survival/box-large'], tone: [0.65, 0.45, [1, 0.95, 0.9]] },
+    boat: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small', 'watercraft/boat-speed-a'], tone: [0.6, 0.12, [0.95, 1, 1]] },
+    // the same boats burnt out and half sunk
+    hulk: { env: 'sea', fit: 'w', files: ['watercraft/boat-tug-a', 'watercraft/boat-tug-b', 'watercraft/boat-fishing-small'], tone: [0.35, ...BURNT_TONE] },
+    cargoship: { env: 'sea', fit: 'w', files: ['watercraft/ship-cargo-a', 'watercraft/ship-cargo-b', 'watercraft/ship-cargo-c'], tone: [0.55, 0.15, [1.1, 1, 0.92]] },
+    deadtree: { env: ['ground', 'air'], fit: 'h', set: true, files: ['trees/dead'] },
+    barricade: { env: ['ground', 'air'], fit: 'w', files: ['survival/fence-fortified'] },
+    supply: { env: ['ground', 'air'], fit: 'w', files: ['survival/box-large', 'survival/barrel'] },
     // single models from poly.pizza (see models/poly/LICENSE.txt)
-    barn: { env: 'air', fit: 'w', files: ['poly/barn', 'poly/big-barn'] },
-    silo: { env: 'air', fit: 'h', files: ['poly/silo'] },
-    hay: { env: 'air', fit: 'w', files: ['poly/hay'] },
-    windmill: { env: 'air', fit: 'h', files: ['poly/windmill'] },
     mast: { env: 'air', fit: 'h', files: ['poly/pylon'] },
-    lighthouse: { env: 'sea', fit: 'h', files: ['poly/lighthouse'] },
+    lighthouse: { env: 'sea', fit: 'h', files: ['poly/lighthouse'], tone: [0.6, 0.25, [1.1, 1, 0.92]] },
     dock: { env: 'sea', fit: 'w', files: ['poly/dock'] },
     // pivot = keep the model's own origin (centre of the portal), so the jib overhang is not squeezed into the footprint
     crane: { env: 'sea', fit: 'h', pivot: true, files: ['port/crane-sokol'] },
     // burnt = colour factor that chars models which come clean (the Humvee is a scan of a real wreck)
-    wreck: { env: 'ground', fit: 'w', files: ['poly/broken-car', 'poly/pickup-armored', 'vehicles/humvee-wreck'], burnt: { 'poly/pickup-armored': 0.4, 'poly/broken-car': 0.75 } },
+    wreck: { env: ['ground', 'air'], fit: 'w', files: ['poly/broken-car', 'poly/pickup-armored', 'vehicles/humvee-wreck'], burnt: { 'poly/pickup-armored': 0.4, 'poly/broken-car': 0.75 } },
     // Sketchfab models (see models/vehicles/LICENSE.txt)
-    truck: { env: 'ground', fit: 'w', files: ['vehicles/gaz51-a', 'vehicles/gaz51-b', 'vehicles/gaz51-c'], burnt: { 'vehicles/gaz51-a': 0.4, 'vehicles/gaz51-b': 0.4, 'vehicles/gaz51-c': 0.4 } },
-    sandbags: { env: 'ground', fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
-    block: { env: 'ground', fit: 'w', files: ['poly/barrier'] },
+    truck: { env: ['ground', 'air'], fit: 'w', files: ['vehicles/gaz51-a', 'vehicles/gaz51-b', 'vehicles/gaz51-c'], burnt: { 'vehicles/gaz51-a': 0.4, 'vehicles/gaz51-b': 0.4, 'vehicles/gaz51-c': 0.4 } },
+    sandbags: { env: ['ground', 'air'], fit: 'w', files: ['poly/sandbags', 'poly/sandbags-small'] },
+    block: { env: ['ground', 'air'], fit: 'w', files: ['poly/barrier'] },
   };
   // hand-built classes are instanced too, from three pre-built variants each
   // (except those carrying glow sprites, which instancing cannot draw)
@@ -1164,7 +1216,9 @@
       });
     };
     // scale a model to its class, stand it on the ground (or sink it into the water), centre it
-    const prepare = (node, cls, fit, pivot, burnt) => {
+    // tone = [brightness, saturation kept, [r, g, b] tint]: burnt-out vehicles, or bright toy
+    // colours dulled to the drab of the front
+    const prepare = (node, cls, fit, pivot, tone) => {
       bb.setFromObject(node); bb.getSize(size); bb.getCenter(mid);
       const r = Math.max(size.x, size.z) / 2;
       const k = fit === 'h' ? cls.h / size.y : cls.w * 0.95 / r;
@@ -1181,13 +1235,16 @@
         (Array.isArray(m.material) ? m.material : [m.material]).forEach((mat) => {
           mat.metalness = 0; // some kits ship fully metallic materials, which render black here
           mat.roughness = 0.9;
-          if (burnt && !mat.userData.burnt) { // char it: most of the paint gone, darker, towards rust (meshes may share a material)
-            mat.userData.burnt = true;
-            mat.color.multiplyScalar(burnt);
+          if (tone && !mat.userData.toned) { // meshes may share a material: tone it once
+            mat.userData.toned = true;
+            const [f, sat, [r, g, b]] = tone, key = `tone${sat},${r},${g},${b}`;
+            mat.color.multiplyScalar(f);
+            if (mat.emissive) mat.emissive.multiplyScalar(0.2); // no glowing windows on the front
             mat.onBeforeCompile = (sh) => {
               sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-                diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.25) * vec3(1.25, 1.0, 0.8);`);
+                diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, ${sat.toFixed(2)}) * vec3(${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)});`);
             };
+            mat.customProgramCacheKey = () => key; // the same function with other numbers: keep the programs apart
           }
           if (mat.transparent || mat.alphaTest > 0) { // leaf cards: hard cut-out instead of blending, so they sort and shadow correctly
             mat.transparent = false;
@@ -1201,13 +1258,15 @@
       holder.add(inner);
       return holder;
     };
+    const BURNT = [0.25, [1.25, 1, 0.8]];
+    const toneOf = (spec, file) => (spec.burnt && spec.burnt[file] ? [spec.burnt[file], ...BURNT] : spec.tone || null);
     return (env) => Object.keys(MODELS).forEach((type) => {
       const spec = MODELS[type], cls = CLASSES[type];
-      if (spec.env !== env || asked[type]) return;
+      if (!(spec.env === env || (Array.isArray(spec.env) && spec.env.includes(env))) || asked[type]) return;
       asked[type] = true;
       Promise.all(spec.files.map(load)).then((scenes) => {
         const list = [];
-        scenes.forEach((sc, i) => sc && (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot, spec.burnt && spec.burnt[spec.files[i]]))));
+        scenes.forEach((sc, i) => sc && (spec.set ? split(sc) : [sc]).forEach((n) => list.push(prepare(n, cls, spec.fit, spec.pivot, toneOf(spec, spec.files[i])))));
         if (!list.length) return;
         variants[type] = list.map(makeVariant); // objects made from now on are drawn instanced straight away
         objects.forEach((o) => {
@@ -1233,7 +1292,7 @@
     t.repeat.set(14, 1);
     return t;
   })();
-  const CROPS = [0xb39a4e, 0x587f3a, 0x5f4632, 0xbfae4a, 0x70904a];
+  const CROPS = [0x6e6545, 0x56593a, 0x3a3128, 0x2c2723, 0x77704f]; // unharvested stubble, weeds, bare and burnt earth
   const fields = [], freeFields = [];
   for (let i = 0; i < 16; i++) {
     const g = new THREE.PlaneGeometry(1, 1, 10, 20).rotateX(-Math.PI / 2);
@@ -1293,7 +1352,7 @@
   }
   LITTER.forEach(addLitter);
   // how many pieces are drawn, and whether they cast shadows (grass never does: thousands of cut-out cards)
-  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter); im.castShadow = quality === 2 && !K.grass; });
+  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter * (cfg.litter || 1)); im.castShadow = quality === 2 && !K.grass; });
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e3 = new THREE.Euler(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
   // stand piece i of kind K on the ground; the group sits at z = dist, so a piece's local z is -s
   function setLitter(K, i) {
@@ -1398,7 +1457,7 @@
   /* ----- smoke over the battlefield: a few columns rising from burning wrecks and fresh hits
      far ahead, all puffs drawn in one call (instanced billboards; size, fade and drift are
      worked out in the shader from each puff's age). At night the foot of a column glows. ----- */
-  const PLUMES = 5, PUFFS = 24;
+  const PLUMES = 8, PUFFS = 24, FLAMES = 6; // columns in use: cfg.plumes (5 unless set)
   const puffTex = (() => {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
@@ -1455,30 +1514,84 @@
   const wind = new THREE.Vector2(rand(0.35, 0.6) * (Math.random() < 0.5 ? -1 : 1), rand(-0.25, 0.15)); // drift per metre of rise
   const plumes = Array.from({ length: PLUMES }, () => ({ x: 0, s: -1e6, y: 0, h: 20, rate: 0.1, dark: 0.5, fire: glow(0xff5a14, 3) }));
   plumes.forEach((p) => { p.fire.visible = false; scene.add(p.fire); });
+  // flames: tongues of fire drawn in the shader (a flickering, tapering blob, white-yellow at the
+  // root, red at the tips), additive, one call for all of them
+  const flameGeo = new THREE.InstancedBufferGeometry();
+  flameGeo.setAttribute('position', smokeGeo.getAttribute('position'));
+  flameGeo.setIndex(smokeGeo.getIndex());
+  const flamePos = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * FLAMES * 3), 3);
+  const flameArg = new THREE.InstancedBufferAttribute(new Float32Array(PLUMES * FLAMES * 4), 4); // width, height, seed, strength
+  flamePos.setUsage(THREE.DynamicDrawUsage);
+  flameGeo.setAttribute('aPos', flamePos);
+  flameGeo.setAttribute('aArg', flameArg);
+  flameGeo.instanceCount = PLUMES * FLAMES;
+  const flameMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: U.time, uFogD: { value: 0 }, uGain: { value: 1 } },
+    vertexShader: `attribute vec3 aPos; attribute vec4 aArg; uniform float uTime; uniform float uFogD;
+      varying vec2 vUv; varying float vSeed; varying float vA;
+      void main(){
+        float fl = 0.8 + 0.2 * sin(uTime * 11.0 + aArg.z * 7.0) + 0.1 * sin(uTime * 23.0 + aArg.z);
+        vec4 mv = modelViewMatrix * vec4(aPos, 1.0);
+        mv.xy += vec2(position.x * aArg.x, (position.y + 0.5) * aArg.y * fl);
+        gl_Position = projectionMatrix * mv;
+        vUv = position.xy + 0.5; vSeed = aArg.z;
+        vA = aArg.w * exp(-uFogD * uFogD * mv.z * mv.z * 0.35);
+      }`,
+    fragmentShader: `uniform float uTime; uniform float uGain; varying vec2 vUv; varying float vSeed; varying float vA;
+      void main(){
+        vec2 p = vUv * 2.0 - 1.0;
+        p.x += sin(vUv.y * 7.0 - uTime * 9.0 + vSeed * 3.0) * 0.18 * vUv.y;
+        float w = mix(0.95, 0.12, pow(vUv.y, 0.8));                 // wide at the root, a tip at the top
+        float a = smoothstep(w, w * 0.25, abs(p.x)) * smoothstep(1.0, 0.55, vUv.y) * smoothstep(0.0, 0.12, vUv.y);
+        vec3 col = mix(vec3(1.0, 0.86, 0.5), vec3(1.0, 0.32, 0.06), smoothstep(0.1, 0.8, vUv.y));
+        gl_FragColor = vec4(col * a * vA * uGain, a * vA);
+      }`,
+  });
+  const flames = new THREE.Mesh(flameGeo, flameMat);
+  flames.frustumCulled = false;
+  flames.renderOrder = 3;
+  scene.add(flames);
+  plumes.forEach((p) => { p.tongues = Array.from({ length: FLAMES }, () => ({ dx: 0, dz: 0, w: 1, h: 2, seed: rand(0, 100) })); });
+  const BURNS = { wreck: true, truck: true, hulk: true, port: true, warehouse: true }; // what may be on fire
   // light a column somewhere ahead: on a wreck when there is one far enough out, else on open ground
   function spawnPlume(p, s0, s1) {
-    const w = objects.filter((o) => o.visible && (o.userData.type === 'wreck' || o.userData.type === 'truck') && o.userData.s > s0 && o.userData.s < s1 && !plumes.some((q) => q.wreck === o));
+    const w = objects.filter((o) => o.visible && BURNS[o.userData.type] && o.userData.s > s0 && o.userData.s < s1 && !plumes.some((q) => q.wreck === o));
     const o = w.length && Math.random() < 0.6 ? pick(w) : null;
     p.wreck = o;
     p.s = o ? o.userData.s : rand(s0, s1 + 120);
     p.x = o ? o.position.x : pathX(Math.min(p.s, dist + DEPTH)) + rand(-110, 110);
-    p.y = terrainH(p.x, p.s, true) + (o ? 1 : 0);
+    p.y = terrainH(p.x, p.s, true) + (o ? (o.userData.type === 'port' || o.userData.type === 'warehouse' ? 2.4 : 0.6) : 0);
+    if (o && (o.userData.type === 'port')) p.x = o.position.x + (o.rotation.y ? -1 : 1) * rand(6, 12); // on the quay, not in the water
     p.h = rand(18, 40); p.rate = rand(0.05, 0.09); p.dark = o ? rand(0.75, 1) : rand(0.2, 0.7); p.seed = rand(0, 100);
     p.fire.scale.setScalar(o ? 3.5 : 2.2);
     p.fire.material.opacity = o ? 0.8 : 0.5;
+    // the fire itself: a burning hull or vehicle has a big one, open ground a small one
+    const big = o ? 1 : 0.45, spread = o ? o.userData.w * 0.6 : 0.8;
+    p.flame = Math.random() < (o ? 1 : 0.5) ? big : 0;
+    p.tongues.forEach((t) => Object.assign(t, { dx: rand(-spread, spread), dz: rand(-spread, spread), w: rand(0.7, 1.4) * big + 0.3, h: rand(1.4, 3.2) * big + 0.4 }));
   }
   function updateSmoke() {
+    const active = cfg.plumes || 5;
     plumes.forEach((p, k) => {
-      if (p.s < dist - 20) spawnPlume(p, dist + 90, dist + DEPTH);
+      if (k >= active) p.s = -1e6;                       // not in use here: an old puff, invisible
+      else if (p.s < dist - 20) spawnPlume(p, dist + 90, dist + DEPTH);
+      p.fire.visible = k < active && !day;
       p.fire.position.set(p.x, p.y + 0.8, dist - p.s);
+      p.tongues.forEach((t, i) => {
+        const j = k * FLAMES + i, on = k < active && p.flame;
+        flamePos.setXYZ(j, p.x + t.dx, p.y - 0.3, dist - p.s + t.dz);
+        flameArg.setXYZW(j, t.w, t.h, t.seed, on ? 0.9 : 0);
+      });
       for (let i = 0; i < PUFFS; i++) {
-        const j = k * PUFFS + i, t = (time * p.rate + i / PUFFS) % 1, rise = t * p.h;
+        const j = k * PUFFS + i, t = k < active ? (time * p.rate + i / PUFFS) % 1 : 0.999, rise = t * p.h;
         const wob = Math.sin(t * 7 + p.seed + i) * (0.4 + t * 2);
         puffPos.setXYZ(j, p.x + wind.x * rise + wob, p.y + rise, dist - p.s - wind.y * rise);
         puffArg.setXYZW(j, t, 0.6 + 0.4 * Math.abs(Math.sin(p.seed + i * 1.7)), p.dark, p.seed + i * 2.4);
       }
     });
     puffPos.needsUpdate = puffArg.needsUpdate = true;
+    flamePos.needsUpdate = flameArg.needsUpdate = true;
   }
 
   /* ----- mist: low banks lying in the fields off to the left or right, wide soft billboards
@@ -1553,7 +1666,7 @@
   function updateClouds(dt) {
     cloudMat.uniforms.uTime.value += dt;
     let f = null;
-    if (envName === 'ground' && !day) for (const g of flashes) if (!f || g.material.opacity > f.material.opacity) f = g;
+    if (!day) for (const g of flashes) if (!f || g.material.opacity > f.material.opacity) f = g;
     if (f) cloudMat.uniforms.uFlashDir.value.copy(f.position).normalize();
     cloudMat.uniforms.uFlash.value.copy(flashCol).multiplyScalar(f ? f.material.opacity * 1.6 : 0);
   }
@@ -1701,11 +1814,11 @@
     return o;
   }
   const treeOrStump = () => (Math.random() < 0.7 ? 'deadtree' : 'stump');
-  const rowStep = () => rand(2.6, 4.6) / Math.sqrt(Q.density);
+  const rowStep = () => rand(2.6, 4.6) / Math.sqrt(Q.density) * (cfg.rows || 1);
   let alongs = []; // tree lines running beside the track: { x at s0, drift dx/ds, end }
   function treeLines(s0, s1) {
     const a = wp[wp.length - 1], band = cfg.band;
-    if (Math.random() < 0.3) {                           // one across the track
+    if (per(cfg.lines || 0.3)) {                         // one across the track
       const s = rand(s0 + 14, s1), tilt = rand(-0.3, 0.3), gap = lane(s) + rand(-1.5, 1.5);
       for (let x = a.x - band; x < a.x + band; x += rowStep()) {
         if (Math.abs(x - gap) < 6.5) continue;
@@ -1722,7 +1835,7 @@
       }
     }
     alongs = alongs.filter((l) => l.end > s0);
-    if (alongs.length < 2 && Math.random() < 0.35) {    // one beside it, starting here
+    if (alongs.length < 3 && per(cfg.lines ? 0.5 : 0.35)) { // one beside it, starting here
       const side = Math.random() < 0.5 ? -1 : 1;
       alongs.push({ x: a.x + side * rand(16, 45), s: s0, drift: rand(-0.08, 0.08), end: s0 + rand(60, 220) });
     }
@@ -1733,17 +1846,39 @@
       }
     }
   }
-  /* something on the line the vehicle is heading along every 20-40 m, so it keeps steering
-     round things: mostly what lies about everywhere, hedgehogs and sandbags often, a wreck rarely */
-  const IN_PATH = ['stump', 'stump', 'deadtree', 'crater', 'crater', 'hedgehog', 'hedgehog', 'hedgehog', 'sandbags', 'sandbags', 'block', 'wire', 'wreck', 'truck'];
+  /* something on the line the platform is heading along every so often (cfg.obs), so it keeps
+     steering round things: on the ground mostly what lies about everywhere, a wreck rarely;
+     trees and silos in the air; buoys, boats and flotsam at sea */
   let nextObs = 0;
+  let gateAt = -1e9; // where the gate of the step being planned stands (single obstacles keep off it)
+  function gate(s0, s1) {
+    const G = cfg.gate;
+    if (!G || !per(G.chance)) return;
+    const s = rand(s0 + (s1 - s0) * 0.7, s1 + 3), base = lane(s);
+    // the gap: off to one side of the line, but within what one step can reach
+    const lo = Math.max(laneFrom - laneReach * 0.85, -cfg.limit + 8), hi = Math.min(laneFrom + laneReach * 0.85, cfg.limit - 8);
+    let side = Math.random() < 0.5 ? -1 : 1;
+    if (base + side * G.shift[0] < lo || base + side * G.shift[0] > hi) side = -side;
+    const gapX = clamp(base + side * rand(G.shift[0], G.shift[1]), lo, hi);
+    for (let x = base - G.span; x <= base + G.span; x += G.step * rand(0.85, 1.15)) {
+      const o = take(pick(G.kinds));
+      if (!o) continue;
+      const scale = o.userData.cls.fixed ? 1 : rand(0.85, 1.1), ss = s + rand(-1.2, 1.2);
+      // the way through: room for the platform and its margin, with a little to spare
+      if (Math.abs(x - gapX) < o.userData.cls.w * scale + cfg.margin + G.slack) { release(o); continue; }
+      if (objects.some((q) => q.visible && Math.hypot(x - q.position.x, ss - q.userData.s) < q.userData.w + 0.6)) { release(o); continue; }
+      put(o, x, ss, scale, 1);
+    }
+    gateAt = s;
+  }
   function inPath(s0, s1) {
     const a = wp[wp.length - 1];
     nextObs = Math.max(nextObs, s0 + (s1 - s0) * 0.55);    // early in a step the curve has not swung out yet
-    for (; nextObs < s1; nextObs += rand(20, 40)) {
+    for (; nextObs < s1; nextObs += rand(cfg.obs.every[0], cfg.obs.every[1])) {
       const s = nextObs, x = lane(s) + rand(-2.5, 2.5);     // on the line the step is about to take
-      if (Math.abs(x) > cfg.limit - 6) continue;                       // leave room to pass it on either side
-      const o = take(pick(IN_PATH));
+      if (Math.abs(s - gateAt) < 12) continue;                         // the gate is enough there
+      if (Math.abs(x) > cfg.limit - 8) continue;                       // leave room to pass it on either side
+      const o = take(pick(cfg.obs.kinds));
       if (!o) continue;
       if (overlaps(x, s, o.userData.cls.w * 0.6)) { release(o); continue; } // something is there already: fine too
       put(o, x, s, o.userData.cls.fixed ? 1 : rand(0.85, 1.2), 1);
@@ -1791,7 +1926,7 @@
     for (const f of forests) {
       const lo = Math.max(s0, f.s0), hi = Math.min(s1, f.s1);
       if (hi <= lo) continue;
-      const n = Math.round((hi - lo) * 100 / 24 * Q.density);
+      const n = Math.round((hi - lo) * 100 / 24 * Q.density * (cfg.forest || 1));
       for (let i = 0; i < n; i++) {
         const s = rand(lo, hi), x = a.x + rand(-50, 50);
         if (Math.abs(x - lane(s)) < cfg.lane) continue;    // the road keeps its lane through the trees
@@ -1837,18 +1972,25 @@
     if (o) { o.rotation.y = rand(-0.3, 0.3); syncInst(o); }
   }
 
+  // a chance given per planning step, scaled to the length of this one
+  let stepK = 1;
+  const per = (p) => Math.random() < p * stepK;
   function populate(s0, s1) {
     const area = (s1 - s0) * cfg.band * 2 * Q.density;
-    cfg.scatter.forEach(([type, per]) => {
-      for (let i = Math.floor(area / per + Math.random()); i > 0; i--) scatter(type, s0, s1);
+    stepK = (s1 - s0) / (cfg.segRef || (s1 - s0));
+    cfg.scatter.forEach(([type, m2]) => {
+      for (let i = Math.floor(area / m2 + Math.random()); i > 0; i--) scatter(type, s0, s1);
     });
     cfg.extras(s0, s1);
+    gateAt = -1e9;
+    gate(s0, s1);
+    if (cfg.obs) inPath(s0, s1);
   }
 
   // the line the step being planned is expected to take (from its start towards its target);
   // scattered objects keep off it, tree lines and belts leave their gap on it, and the
   // obstacles meant to be driven round are put on it
-  let lane = (s) => wp[wp.length - 1].x;
+  let lane = (s) => wp[wp.length - 1].x, laneFrom = 0, laneReach = 10;
 
   function plan() {
     const a = wp[wp.length - 1], L = rand(cfg.seg[0], cfg.seg[1]), end = a.s + L;
@@ -1867,6 +2009,7 @@
     }
     const reach = cfg.slope * L / 1.875 * (cfg.agile || 1), cands = [];
     const xEnd = clamp(target, a.x - reach * 0.7, a.x + reach * 0.7), vEnd = (xEnd - a.x) / L * 0.6;
+    laneFrom = a.x; laneReach = reach;
     lane = (s) => (s <= end ? hermite(a.x, a.vx, xEnd, vEnd, L, clamp((s - a.s) / L, 0, 1), 0) : xEnd + vEnd * (s - end));
     populate(a.s, end);
     const near = objects.filter((o) => o.visible && o.userData.s > a.s - 15 && o.userData.s < end + 25);
@@ -1882,7 +2025,7 @@
       if (Math.abs(x) > cfg.limit) continue;
       for (const y of ys) {
         // leave the step still drifting the same way, a little slower, so the next one carries on smoothly
-        cands.push({ x, y, vx: (x - a.x) / L * 0.6, vy: (y - a.y) / L * 0.5, cost: Math.abs(x - target) * (cfg.meander ? 0.9 : 0.4) + Math.abs(x - a.x) * (cfg.meander ? 0.3 : 0.6) + Math.abs(y - prefY) * 1.2 + (y - a.y > 0 ? (y - a.y) * 0.8 : 0) + Math.random() * 0.4 });
+        cands.push({ x, y, vx: (x - a.x) / L * 0.6, vy: (y - a.y) / L * 0.5, cost: Math.abs(x - target) * (cfg.meander ? 0.9 : 0.4) + Math.abs(x - a.x) * (cfg.meander ? 0.3 : 0.6) + Math.abs(y - prefY) * 1.2 + (y - a.y > 0 ? (y - a.y) * (cfg.meander ? 2.2 : 0.8) : 0) + Math.random() * 0.4 });
       }
     }
     cands.sort((p, q) => p.cost - q.cost);
@@ -1944,12 +2087,12 @@
   let speed = cfg.speed, last = 0, raf = 0, visible = false;
   let vx = 0, ax = 0, roll = 0, poseDt = 1 / 60, agl = 0, W = 1, H = 1, tracked = 0;
   // ground colour by day / night, and the tint of dry patches
-  const GROUND = { air: [0x58693a, 0x232c26, [1.14, 1.05, 0.76]], ground: [0x45392b, 0x1f1a15, [1.12, 1.0, 0.86]] };
+  const GROUND = { air: [0x57533a, 0x201f19, [1.1, 1.0, 0.82]], ground: [0x45392b, 0x1f1a15, [1.12, 1.0, 0.86]] };
   function applyLook() {
     const sea = envName === 'sea';
     // a hazy, slightly desaturated day rather than a postcard blue
-    const grey = envName === 'ground'; // overcast, dust and smoke over the front
-    const horizon = day ? (sea ? 0xaebfc9 : grey ? 0xa7a9a6 : 0xb3c1c8) : grey ? 0x10141f : 0x131b30;
+    const grey = true; // overcast, dust and smoke over the front, in every environment
+    const horizon = day ? (sea ? 0xa2a8a8 : 0xa7a9a6) : 0x10141f;
     skyMat.uniforms.top.value.set(day ? (grey ? 0x6f7c88 : 0x3f6c9e) : 0x03050b);
     skyMat.uniforms.bottom.value.set(horizon);
     skyMat.uniforms.glowCol.value.set(day ? 0xffd6a0 : 0x141a2c);
@@ -1963,7 +2106,6 @@
     sun.color.set(day ? (grey ? 0xe8e4dc : 0xffe4c0) : 0xb4c4ff);
     sun.intensity = day ? (grey ? 0.55 : 1.3) : 0.5;        // the sun is a pale disc, shadows faint
     lightDir = LIGHT[day ? 'day' : 'night'];
-    head.intensity = day ? 0 : 1.7;
     mats.glass.emissiveIntensity = day ? 0 : 1.3;
     ground.visible = !sea;
     water.visible = sea;
@@ -1973,9 +2115,9 @@
       U.dry.value.set(...dry);
     }
     waterMat.color.set(0xffffff);
-    U.deep.value.set(day ? 0x082636 : 0x020b12);
-    U.shallow.value.set(day ? 0x1b5d68 : 0x082630);
-    U.foam.value.set(day ? 0xd8e2e4 : 0x5d6c78);
+    U.deep.value.set(day ? 0x141f1e : 0x03080a);               // murky grey-green, not a holiday blue
+    U.shallow.value.set(day ? 0x2c3a35 : 0x0b1517);
+    U.foam.value.set(day ? 0xb9bdb7 : 0x48525a);
     waterMat.envMap = SKY_ENV[day ? 'day' : 'night'];
     waterMat.envMapIntensity = day ? 0.65 : 0.8;
     waterMat.needsUpdate = true;
@@ -1996,13 +2138,14 @@
     stars.visible = !day;
     dustMat.color.set(day || sea ? 0xffffff : 0xfff0a0);
     dustMat.opacity = day ? 0.3 : sea ? 0.4 : 0.8;
-    const grd = envName === 'ground';
+    const grd = true;
     smokeMat.uniforms.uDark.value.set(day ? 0x2e2b28 : 0x0b0c0f);
     smokeMat.uniforms.uLight.value.set(day ? 0x8f8a82 : 0x22252c);
     smokeMat.uniforms.uFire.value.set(day ? 0x000000 : 0x9a3c10);
     smokeMat.uniforms.uFog.value.copy(scene.fog.color);
     smokeMat.uniforms.uFogD.value = scene.fog.density;
-    plumes.forEach((p) => { p.fire.visible = grd && !day; });
+    flameMat.uniforms.uFogD.value = scene.fog.density;
+    flameMat.uniforms.uGain.value = day ? 0.8 : 1.3;
     flashes.forEach((f) => { f.visible = grd && !day; });
     const cu = cloudMat.uniforms;
     cu.uCover.value = CLOUD[envName][day ? 0 : 1];
@@ -2029,20 +2172,21 @@
     craters.forEach((c) => c.set(0, -1e6, 1, 0));
     alongs = []; nextObs = 0; roadFrom = -1e9; forests = [];
     U.ash.value.set(-1e6, -1e6, -1e6, -1e6);
-    U.roadOn.value = name === 'ground' ? 1 : 0;
+    U.roadOn.value = U.wet.value = name === 'ground' ? 1 : 0;
     fpsWarm = 2.5;
     loadModels(name);
-    if (name === 'ground') loadGrass();
+    if (name !== 'sea') loadGrass();
     objects.forEach((o) => { if (o.visible) release(o); });
     fields.forEach((f) => { if (f.visible) { f.visible = false; freeFields.push(f); } });
     vx = ax = roll = 0;
     shakeFrom = dist;
     reset();
-    litter.visible = smoke.visible = name === 'ground';
-    mist.visible = name !== 'sea';
+    litter.visible = name !== 'sea';
+    LITTER.forEach(litterQuality);
+    smoke.visible = mist.visible = true;
     banks.forEach((b, i) => spawnBank(b, dist + 25 + i * 30, dist + 60 + i * 30));
-    if (name === 'ground') {
-      plumes.forEach((p, i) => spawnPlume(p, dist + 30 + i * 35, dist + 60 + i * 35));
+    plumes.forEach((p, i) => spawnPlume(p, dist + 30 + i * 35, dist + 60 + i * 35));
+    if (name !== 'sea') {
       craters.forEach((c, i) => { if (i < CR_RAND) spawnCrater(c, dist + 6, dist + DEPTH); });
       LITTER.forEach((K, k) => scatterLitter(k));
     }
@@ -2089,14 +2233,15 @@
     const target = clamp((goal - camera.position.x) / 90, -0.7, 0.7);
     const turn = (target - heading) * (1 - Math.exp(-dt * 0.35));
     heading += turn;
-    yaw += (clamp(turn / dt * 1.5, -0.2, 0.2) - yaw) * (1 - Math.exp(-dt * 2)); // looks into the turn
+    const look = envName === 'air' ? 0.1 : 0.2;
+    yaw += (clamp(turn / dt * 1.5, -look, look) - yaw) * (1 - Math.exp(-dt * 1.5)); // looks into the turn
     skyGroup.rotation.y = heading;
   }
 
   /* ----- motion ----- */
   // place the camera for the current distance; each platform moves in its own way
   function pose() {
-    const x = pathX(dist), gy = terrainH(x, dist);
+    const x = pathX(dist), gy = envName === 'air' ? reliefH(x, dist) : terrainH(x, dist);
     vx = route(dist, 1) * speed;
     ax = route(dist, 2) * speed * speed;
     let y = gy + (cfg.alt || 0), pitch = 0, tilt = 0, down = 0.3, look = 0;
@@ -2104,7 +2249,7 @@
       agl = pathY(dist) + Math.sin(time * 0.4) * 0.12;
       y = gy + agl;
       look = route(dist, 1, 'y') * 30 * 0.7;               // eyes follow the climb or the descent
-      tilt = -Math.atan(ax / 9.81);                        // banks into the turn
+      tilt = -Math.atan(ax / 9.81) * 0.6;                  // banks into the turn (gently: the view stays readable)
       down = 0.3 + agl * 0.04;                             // looks further down from higher up
     } else if (envName === 'sea') {
       y += wave(x, dist, time);                            // heaves, pitches and rolls with the swell
@@ -2120,7 +2265,7 @@
       down = 0.08;
       y += shake.y; pitch += shake.p;
     }
-    roll += (tilt - roll) * (1 - Math.exp(-poseDt * 2.2)); // eases into the bank instead of snapping
+    roll += (tilt - roll) * (1 - Math.exp(-poseDt * (envName === 'air' ? 1.4 : 2.2))); // eases into the bank instead of snapping
     camera.position.set(x, y, 0);
     camera.lookAt(x + vx / speed * 30, y - down + look, -30);
     camera.rotateY(-yaw);
@@ -2147,8 +2292,12 @@
     skyGroup.position.x = cx;
     snapGround(cx);
     instRoot.position.z = dist;
-    if (envName === 'ground') { updateLitter(); updateSmoke(); updateRoad(); if (!day) updateFlashes(dt); }
+    if (envName !== 'sea') updateLitter();
+    if (envName === 'ground') updateRoad();
+    updateSmoke();
+    if (!day) updateFlashes(dt);
     updateClouds(dt);
+    updateDrops(dt);
     if (mist.visible) updateMist();
     sun.target.position.set(cx, y - 3, -28);
     sun.position.copy(lightNow.copy(lightDir).applyAxisAngle(Y_AXIS, heading)).multiplyScalar(70).add(sun.target.position);
@@ -2197,8 +2346,61 @@
     return v.z > 1 ? null : [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H];
   };
 
+  /* ----- spray on the lens at sea: now and then a drop lands on the camera window, clings for a
+     moment, then runs down leaving a faint wet trail. Drawn on the HUD canvas, kept subtle. ----- */
+  const drops = [];
+  let dropNext = 3;
+  function updateDrops(dt) {
+    if (envName !== 'sea') { drops.length = 0; return; }
+    if ((dropNext -= dt) < 0) {
+      for (let n = Math.random() < 0.3 ? 2 : 1; n > 0; n--) {
+        drops.push({ x: rand(0.06, 0.94) * W, y: rand(0.05, 0.6) * H, r: rand(3.5, 9), age: 0, hold: rand(0.6, 2.2), vy: 0, trail: [] });
+      }
+      dropNext = rand(3, 8);
+    }
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.age += dt;
+      if (d.age > d.hold) {                                 // it lets go and runs down, wobbling a little
+        d.vy = Math.min(d.vy + 90 * dt, 70);
+        d.y += d.vy * dt;
+        d.x += Math.sin(d.age * 3 + d.r) * 6 * dt;
+        d.r = Math.max(1.5, d.r - dt * 0.8);
+        const last = d.trail[d.trail.length - 1];
+        if (!last || d.y - last[1] > 3) d.trail.push([d.x, d.y - d.r * 0.6]);
+        if (d.trail.length > 16) d.trail.shift();           // the streak dries from the top
+      }
+      if (d.y - d.r > H || d.age > d.hold + 3) drops.splice(i, 1);
+    }
+  }
+  function drawDrops() {
+    for (const d of drops) {
+      const fade = clamp(Math.min(d.age * 6, d.hold + 3 - d.age), 0, 1);
+      if (d.trail.length > 1) {                             // the wet streak it leaves, drying from the top
+        h2.lineWidth = Math.max(1, d.r * 0.5);
+        h2.lineCap = 'round';
+        for (let k = 1; k < d.trail.length; k++) {
+          h2.strokeStyle = `rgba(220,230,235,${0.07 * fade * k / d.trail.length})`;
+          h2.beginPath(); h2.moveTo(d.trail[k - 1][0], d.trail[k - 1][1]); h2.lineTo(d.trail[k][0], d.trail[k][1]); h2.stroke();
+        }
+      }
+      // the drop: a clear lens, darker rim at the bottom, a highlight at the top
+      const g = h2.createRadialGradient(d.x, d.y - d.r * 0.2, d.r * 0.2, d.x, d.y, d.r);
+      g.addColorStop(0, `rgba(255,255,255,${0.05 * fade})`);
+      g.addColorStop(0.75, `rgba(200,210,215,${0.1 * fade})`);
+      g.addColorStop(1, `rgba(20,25,30,${0.22 * fade})`);
+      h2.fillStyle = g;
+      h2.beginPath(); h2.ellipse(d.x, d.y, d.r * 0.9, d.r, 0, 0, Math.PI * 2); h2.fill();
+      h2.fillStyle = `rgba(255,255,255,${0.4 * fade})`;
+      h2.beginPath(); h2.arc(d.x - d.r * 0.3, d.y - d.r * 0.4, Math.max(0.8, d.r * 0.18), 0, Math.PI * 2); h2.fill();
+    }
+    h2.lineCap = 'butt';
+  }
+
   function drawHud() {
     h2.clearRect(0, 0, W, H);
+    h2.globalAlpha = 1;
+    drawDrops();
     h2.font = '10px "JetBrains Mono", ui-monospace, monospace';
     h2.lineWidth = 1;
     const cx = W / 2, cy = H / 2;
@@ -2235,6 +2437,7 @@
 
     // detections
     tracked = 0;
+    const labels = [];
     for (const o of objects) {
       if (!o.visible) continue;
       const u = o.userData, d = -o.position.z;
@@ -2264,10 +2467,22 @@
       h2.stroke();
       if (x1 - x0 > 26 && (threat || over || (d < 45 && x1 - x0 > 40))) { // text only where it matters, or the view drowns in labels
         const conf = Math.min(0.99, u.conf + (1 - d / 95) * 0.08);
-        const action = over ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK';
-        h2.fillText(`${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, Math.max(4, x0), Math.max(12, y0 - 16));
-        h2.fillText(action, Math.max(4, x0), Math.max(24, y0 - 5));
+        labels.push({ d, x: Math.max(4, x0), y: Math.max(12, y0 - 16), col, alpha: h2.globalAlpha, rank: threat || over ? 0 : 1,
+          text: `${u.cls.label} ${(conf * 100).toFixed(0)}%  ${d.toFixed(0)}m`, action: over ? 'OVERFLY' : threat ? 'AVOID' : 'TRACK' });
       }
+    }
+
+    // labels: the nearest threats first, at most five, none written over another
+    labels.sort((p, q) => p.rank - q.rank || p.d - q.d);
+    const shown = [];
+    for (const l of labels) {
+      if (shown.length === 5) break;
+      if (shown.some((m) => Math.abs(m.x - l.x) < 150 && Math.abs(m.y - l.y) < 24)) continue;
+      shown.push(l);
+      h2.globalAlpha = l.alpha;
+      h2.fillStyle = l.col;
+      h2.fillText(l.text, l.x, l.y);
+      h2.fillText(l.action, l.x, Math.max(24, l.y + 11));
     }
 
     // boresight
