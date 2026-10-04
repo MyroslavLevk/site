@@ -1,6 +1,5 @@
 /* Hero: an "x-ray" fixed-wing drone. The airframe is see-through (fine wire lines over faint
-   glass), the FNAV module on its back is the only solid part. It turns slowly, leans towards
-   the pointer and carries two callouts pinned to the module. Shape after the product photo:
+   glass), the FNAV module on its back is the only solid part. It sways slowly and carries two callouts pinned to the module. Shape after the product photo:
    straight wing with a little dihedral, fins on the tips, a pod under the centre, pusher prop. */
 (() => {
   const box = document.getElementById('xray');
@@ -121,7 +120,7 @@
   const v = new T.Vector3();
   const lead = box.querySelector('.xray__lead');
 
-  let W = 1, H = 1, raf = 0, visible = true, t = 0, last = 0, px = 0, py = 0, tx = 0, ty = 0;
+  let W = 1, H = 1, raf = 0, visible = true, t = 0, last = 0;
   function layout() {
     W = box.clientWidth; H = box.clientHeight;
     renderer.setSize(W, H, false);
@@ -131,8 +130,8 @@
     camera.updateProjectionMatrix();
   }
   function render() {
-    drone.rotation.y = -0.55 + (reduced ? 0 : Math.sin(t * 0.25) * 0.45) + px * 0.25;
-    drone.rotation.x = 0.08 + py * 0.12;
+    drone.rotation.y = -0.55 + (reduced ? 0 : Math.sin(t * 0.25) * 0.45);
+    drone.rotation.x = 0.08;
     drone.rotation.z = reduced ? 0 : Math.sin(t * 0.5) * 0.03;
     drone.position.y = reduced ? 0 : Math.sin(t * 0.8) * 0.03;
     blade.rotation.z = t * 30;
@@ -154,7 +153,6 @@
     const dt = Math.min(0.05, (now - last) / 1000 || 0);
     last = now;
     t += dt;
-    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -166,7 +164,6 @@
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; run(); }).observe(box);
   document.addEventListener('visibilitychange', run);
   new ResizeObserver(() => { layout(); render(); }).observe(box);
-  addEventListener('pointermove', (e) => { tx = e.clientX / innerWidth * 2 - 1; ty = e.clientY / innerHeight * 2 - 1; }, { passive: true });
   document.addEventListener('themechange', applyColors);
 
   layout();
