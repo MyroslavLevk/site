@@ -913,6 +913,8 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 /* one row: the outer cards close the frame's sides */
 .hl > :first-child, .cards3 > :first-child { --tl-v: var(--arm); --bl-v: var(--arm); }
 .hl > :last-child, .cards3 > :last-child { --tr-v: var(--arm); --br-v: var(--arm); }
+/* StarNav / SolarNav: the mark over the gap also gets a stem, a T like the Figma frame */
+.hl > * { --tl-v: var(--arm); --tr-v: var(--arm); --bl-v: var(--arm); --br-v: var(--arm); }
 /* 2x2: corners on the left / right edge between the rows are vertical sticks */
 .tiles > :nth-child(1) { --tl-v: var(--arm); --bl-v: var(--arm); --bl-h: 0px; }
 .tiles > :nth-child(2) { --tr-v: var(--arm); --br-v: var(--arm); --br-h: 0px; }
