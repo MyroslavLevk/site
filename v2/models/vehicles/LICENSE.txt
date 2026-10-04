@@ -1,0 +1,12 @@
+gaz51-a.glb, gaz51-b.glb, gaz51-c.glb
+            "GAS 51 vehicle" by Gerhald
+            https://sketchfab.com/3d-models/gas-51-vehicle-ffade7fbd59f4870aab37403897a01d8
+            Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+            Changes: the three trucks split into separate files, materials merged into a
+            colour palette, decimated, meshopt-compressed.
+
+humvee-wreck.glb
+            "Destroyed HMMWV (Humvee) M1114 in Ukraine" by Serhii Revenko
+            https://sketchfab.com/3d-models/destroyed-hmmwv-humvee-m1114-in-ukraine-a7c0c29165d845f3ac840268647e106d
+            Sketchfab Standard licence: https://sketchfab.com/licenses
+            Changes: decimated, texture cut to 1024 px (WebP), meshopt-compressed.

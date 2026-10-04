@@ -127,7 +127,11 @@
       if (!e.isIntersecting) return;
       lazy.disconnect();
       load('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
-        .then(() => load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js').catch(() => {})) // optional: models fall back to built-in shapes
+        // optional: without the loader (or the decoder for the compressed models) the demo falls back to built-in shapes
+        .then(() => Promise.all([
+          load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
+          load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
+        ]).catch(() => {}))
         .then(() => load('game3d.js'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });

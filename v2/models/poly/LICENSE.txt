@@ -9,7 +9,6 @@ windmill.glb        Tower Windmill        by Quaternius    https://poly.pizza/m/
 pylon.glb           Transmission Tower    by iPoly3D       https://poly.pizza/m/qNRfSh4jBS
 dock.glb            Dock Long             by Quaternius    https://poly.pizza/m/bN9Oz3niNm
 lighthouse.glb      Light House           by MaverickFX    https://poly.pizza/m/KRebJXIRb8
-tank.glb            Tank                  by Quaternius    https://poly.pizza/m/Dc4k4CooN3
 broken-car.glb      Broken Car            by Quaternius    https://poly.pizza/m/Y67erogmR9
 pickup-armored.glb  Pickup Truck Armored  by Quaternius    https://poly.pizza/m/RUwMItmU4B
 sandbags.glb        Sack Trench           by Quaternius    https://poly.pizza/m/LW3jwpPfiN
