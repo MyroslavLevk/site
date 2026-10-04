@@ -897,9 +897,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
     linear-gradient(var(--c), var(--c)) right bottom / 1px var(--bl);
   background-repeat: no-repeat;
   opacity: .8;
-  transition: opacity .3s;
 }
-.frame:hover::before { --c: var(--accent); opacity: 1; }
 /* a T over each gap between cards: a 52px bar on the edge, a stem pointing in */
 .tick { position: absolute; left: 50%; width: 52px; height: var(--bl); translate: -50% 0; pointer-events: none; }
 .tick::before, .tick::after { content: ""; position: absolute; background: var(--bracket); opacity: .8; }
@@ -999,7 +997,9 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 
 /* ---------- 01: two highlight cards (Figma "Current Projects") ---------- */
 .hl { display: grid; grid-template-columns: 1fr 1fr; gap: var(--g); }
-.hcard { display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; }
+.hcard { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; transition: border-color .3s; }
+/* only the card under the pointer lights up, never the frame around the group */
+.hcard:hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .hcard__media { position: relative; height: clamp(180px, 16vw, 220px); }
 .hcard__media--night { background: #0b111c; }
 .hcard__media--day { background: #d6e3ea; }
@@ -1011,9 +1011,6 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   gap: 12px;
   padding: 20px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-top: 0;
-  border-radius: 0 0 16px 16px;
 }
 .hcard__body h3 { font-size: clamp(24px, 2.2vw, 30px); font-weight: 500; }
 .hcard__body p { color: var(--muted); font-size: 15px; }
