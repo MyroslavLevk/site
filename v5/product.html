@@ -11,15 +11,16 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="v2">
+<body class="v2 v5">
 
 <header class="nav" id="nav">
-  <a class="nav__logo" href="index.html" aria-label="FNAV Systems">FNAV<span>/systems</span></a>
+  <a class="nav__logo" href="index.html" aria-label="FNAV Systems"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
   <nav class="nav__links" aria-label="Main">
     <a href="index.html">Main</a>
     <a href="product.html" aria-current="page">Product</a>
@@ -32,84 +33,193 @@
 </header>
 
 <main id="top">
-  <section class="page-hero">
-    <span class="mono reveal">Navigation Module v1</span>
-    <h1 class="reveal">FNAV<br>Nav Module</h1>
-    <p class="lead lead--sm reveal">Passive GPS-denied navigation payload. Zero RF emissions. Day and night. UAV, USV and UGV platforms.</p>
-    <a class="btn reveal" href="contact.html" data-magnet><span>Pricing on request</span><i>→</i></a>
+  <section class="phero">
+    <div class="phero__text">
+      <span class="mono reveal">Navigation Module v1</span>
+      <h1 class="reveal">FNAV Nav Module</h1>
+      <p class="phero__lead reveal">Passive GPS-denied navigation payload. Zero RF emissions. Day and night. UAV, USV and UGV platforms.</p>
+      <div class="phero__actions reveal">
+        <a class="btn btn--sm" href="contact.html"><span>Pricing on request</span><i aria-hidden="true">→</i></a>
+        <a class="pbtn" href="tests.html"><span>Test record</span><i aria-hidden="true">→</i></a>
+      </div>
+    </div>
+    <figure class="schematic phero__art reveal">
+      <svg viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
+            <!-- sky sensor view -->
+            <path class="sch__dash" d="M150 96L112 14M196 96l38-82"/>
+            <text class="sch__label" x="173" y="12" text-anchor="middle">SKY SENSOR</text>
+            <!-- body: front, top, side -->
+            <path class="sch__face" d="M60 120h180v100H60z"/>
+            <path class="sch__face sch__face--top" d="M60 120l46-46h180l-46 46z"/>
+            <path class="sch__face sch__face--side" d="M240 120l46-46v100l-46 46z"/>
+            <ellipse class="sch__lens" cx="173" cy="97" rx="26" ry="9"/>
+            <ellipse class="sch__lens-in" cx="173" cy="97" rx="9" ry="3.2"/>
+            <text class="sch__mass" x="150" y="182" text-anchor="middle">100 g</text>
+            <!-- output connector -->
+            <path class="sch__port" d="M256 150l14-14v20l-14 14z"/>
+            <path class="sch__lead" d="M263 163v49h28"/>
+            <text class="sch__label" x="296" y="210">MAVLink out</text>
+            <text class="sch__label sch__label--dim" x="296" y="224">ArduPilot / PX4</text>
+            <!-- dimensions -->
+            <path class="sch__dim" d="M60 236h180M60 231v10M240 231v10"/>
+            <text class="sch__label" x="150" y="254" text-anchor="middle">18 cm</text>
+            <path class="sch__dim" d="M44 112l46-46M40 108l8 8M86 62l8 8"/>
+            <text class="sch__label" x="50" y="82" text-anchor="end">13 cm</text>
+            <path class="sch__dim" d="M300 74v100M295 74h10M295 174h10"/>
+            <text class="sch__label" x="310" y="128">10 cm</text>
+          </svg>
+      <figcaption class="mono">Navigation Module v1 — schematic, appearance illustrative</figcaption>
+    </figure>
   </section>
 
-  <section class="section">
-    <header class="section__head reveal">
-      <span class="mono">01 — Specifications</span>
-      <h2>Small enough<br>to forget it's there.</h2>
-    </header>
-    <dl class="specs">
-      <div class="reveal"><dt class="mono">Weight</dt><dd>100<small>g</small></dd></div>
-      <div class="reveal"><dt class="mono">Length</dt><dd>18<small>cm</small></dd></div>
-      <div class="reveal"><dt class="mono">Width</dt><dd>13<small>cm</small></dd></div>
-      <div class="reveal"><dt class="mono">Height</dt><dd>10<small>cm</small></dd></div>
-      <div class="reveal"><dt class="mono">RF emissions</dt><dd>Zero</dd></div>
-      <div class="reveal"><dt class="mono">Accuracy</dt><dd class="specs__text">On request</dd></div>
-    </dl>
+  <section class="figs" aria-label="Specifications">
+    <div class="fig reveal"><b>100<small>g</small></b><span class="mono">Weight</span></div>
+    <div class="fig reveal"><b>18×13×10<small>cm</small></b><span class="mono">Length × width × height</span></div>
+    <div class="fig reveal"><b>0</b><span class="mono">RF emissions</span></div>
+    <div class="fig reveal"><b class="fig__text">On request</b><span class="mono">Accuracy</span></div>
   </section>
 
-  <section class="section">
-    <header class="section__head reveal">
-      <span class="mono">02 — Operating modes</span>
-      <h2>Night and day.</h2>
-    </header>
-    <div class="cards">
-      <article class="card reveal" data-spot>
-        <span class="mono card__tag">StarNav — Night</span>
-        <svg class="card__art" viewBox="0 0 120 120" aria-hidden="true">
-          <circle cx="60" cy="60" r="44"/><circle cx="60" cy="60" r="24" class="dash"/>
-          <circle cx="38" cy="42" r="2.5" class="fill"/><circle cx="82" cy="52" r="2" class="fill"/>
-          <circle cx="66" cy="86" r="3" class="fill"/><path d="M38 42L82 52L66 86Z" class="thin"/>
-        </svg>
-        <h3>StarNav</h3>
-        <p>Uses the night sky to compute absolute heading — passive, zero-RF, with no error accumulation.</p>
-        <ul class="chips mono"><li>Active at night</li><li>Details by request</li><li>Zero RF</li></ul>
-      </article>
-      <article class="card reveal" data-spot>
-        <span class="mono card__tag">SolarNav — Day</span>
-        <svg class="card__art" viewBox="0 0 120 120" aria-hidden="true">
-          <circle cx="60" cy="60" r="18"/><circle cx="60" cy="60" r="44" class="dash"/>
-          <path class="thin" d="M60 6v14M60 100v14M6 60h14M100 60h14M22 22l10 10M88 88l10 10M98 22L88 32M32 88L22 98"/>
-        </svg>
-        <h3>SolarNav</h3>
-        <p>Uses the sun to compute absolute heading — passive, zero-RF, with no error accumulation. Continuous correction throughout daylight hours.</p>
-        <ul class="chips mono"><li>Active by day</li><li>Continuous correction</li><li>Zero RF</li></ul>
-      </article>
+  <section class="section v5s" id="platforms">
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">01 — Platforms</span>
+        <h2>Air, sea and ground.</h2>
+        <p class="shead__p">The same module keeps UAV, USV and UGV platforms on course without GPS.</p>
+      </div>
+      <a class="pbtn" href="index.html#flight"><span>Open 3D demo</span><i aria-hidden="true">→</i></a>
+    </div>
+    <div class="frame frame--3 reveal">
+      <div class="cards3">
+        <article class="pcard pcard--photo">
+          <div class="shot"><img src="img/uav.webp" alt="Fixed-wing UAV" loading="lazy"></div>
+          <div class="pcard__body">
+            <ul class="pills"><li>Air / UAV</li><li class="pill--b">StarNav + SolarNav</li></ul>
+            <h3>Fixed-wing, multi-rotor, loitering munitions</h3>
+            <p>StarNav + SolarNav output via MAVLink, straight into the autopilot.</p>
+            <a class="pcard__cta mono" href="index.html?env=air#flight">See it in the 3D demo <i>→</i></a>
+          </div>
+        </article>
+        <article class="pcard pcard--photo">
+          <div class="shot"><img src="img/usv.webp" alt="Uncrewed surface vessel" loading="lazy"></div>
+          <div class="pcard__body">
+            <ul class="pills"><li>Sea / USV</li><li class="pill--b">Validated</li></ul>
+            <h3>Open-ocean vessels</h3>
+            <p>Navigation over open water, where map-matching fails entirely.</p>
+            <a class="pcard__cta mono" href="index.html?env=sea#flight">See it in the 3D demo <i>→</i></a>
+          </div>
+        </article>
+        <article class="pcard pcard--photo">
+          <div class="shot"><img src="img/ugv.webp" alt="Tracked uncrewed ground vehicle" loading="lazy"></div>
+          <div class="pcard__body">
+            <ul class="pills"><li>Ground / UGV</li><li class="pill--b">GPS-jammed</li></ul>
+            <h3>Ground vehicles and autonomous rovers</h3>
+            <p>Holds position in GPS-jammed environments.</p>
+            <a class="pcard__cta mono" href="index.html?env=ground#flight">See it in the 3D demo <i>→</i></a>
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section class="section about">
-    <span class="mono reveal">03 — Fallback systems</span>
-    <p class="lead reveal">VIO and map-matching run alongside as a fallback — <em>precise, short-term positioning</em> when celestial reference is temporarily unavailable.</p>
+  <section class="section v5s" id="modes">
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">02 — Operating modes</span>
+        <h2>Night and day.</h2>
+        <p class="shead__p">Both modes are passive and zero-RF, and neither accumulates error.</p>
+      </div>
+    </div>
+    <div class="frame frame--2 reveal">
+      <div class="hl">
+        <article class="hcard">
+          <div class="hcard__media hcard__media--night">
+            <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+              <g class="sys__stars">
+                <circle cx="40" cy="30" r="1.2"/><circle cx="92" cy="74" r="1"/><circle cx="150" cy="22" r="1.4"/>
+                <circle cx="210" cy="96" r="1"/><circle cx="262" cy="40" r="1.2"/><circle cx="330" cy="70" r="1"/>
+                <circle cx="60" cy="128" r="1"/><circle cx="300" cy="150" r="1.2"/><circle cx="180" cy="150" r="1"/>
+                <circle cx="360" cy="24" r="1.3"/><circle cx="24" cy="190" r="1"/><circle cx="120" cy="200" r="1.1"/>
+              </g>
+              <path class="sys__ray" d="M120 60L200 260M236 34L200 260M340 110L200 260"/>
+              <g class="sys__ref">
+                <circle cx="120" cy="60" r="3"/><circle cx="236" cy="34" r="3"/><circle cx="340" cy="110" r="3"/>
+                <path d="M112 52h16v16h-16zM228 26h16v16h-16zM332 102h16v16h-16z"/>
+              </g>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Night</li><li class="pill--b">StarNav</li></ul>
+            <h3>StarNav</h3>
+            <p>Uses the night sky to compute absolute heading. No error accumulation.</p>
+            <div class="hcard__foot mono"><span>Absolute heading · night</span><i aria-hidden="true">↗</i></div>
+          </div>
+        </article>
+        <article class="hcard">
+          <div class="hcard__media hcard__media--day">
+            <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+              <path class="sys__track" d="M-20 220C80 40 300 40 420 220"/>
+              <path class="sys__ray" d="M250 82L200 260"/>
+              <circle class="sys__sun-ring" cx="250" cy="82" r="34"/>
+              <circle class="sys__sun" cx="250" cy="82" r="18"/>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Day</li><li class="pill--b">SolarNav</li></ul>
+            <h3>SolarNav</h3>
+            <p>Uses the sun to compute absolute heading, with continuous correction through daylight hours.</p>
+            <div class="hcard__foot mono"><span>Absolute heading · day</span><i aria-hidden="true">↗</i></div>
+          </div>
+        </article>
+      </div>
+    </div>
   </section>
 
-  <section class="section">
-    <header class="section__head reveal">
-      <span class="mono">04 — Compatibility</span>
-      <h2>Fits what<br>you already fly.</h2>
-    </header>
-    <ul class="chips chips--lg reveal">
-      <li>MAVLink</li><li>ArduPilot</li><li>PX4</li><li>UAV</li><li>USV</li><li>UGV</li>
-    </ul>
+  <section class="section v5s" id="compat">
+    <div class="split">
+      <div class="split__text reveal">
+        <span class="mono">03 — Fallback &amp; compatibility</span>
+        <h3 class="split__title">Fits what you already fly</h3>
+        <p>VIO and map-matching run alongside as a fallback: precise, short-term positioning when the sky is temporarily unavailable.</p>
+      </div>
+      <div class="tiles tiles--3 reveal">
+        <div class="tile"><span class="mono">Protocol</span><h3>MAVLink</h3></div>
+        <div class="tile"><span class="mono">Autopilot</span><h3>ArduPilot</h3></div>
+        <div class="tile"><span class="mono">Autopilot</span><h3>PX4</h3></div>
+        <div class="tile"><span class="mono">Air</span><h3>UAV</h3></div>
+        <div class="tile"><span class="mono">Sea</span><h3>USV</h3></div>
+        <div class="tile"><span class="mono">Ground</span><h3>UGV</h3></div>
+      </div>
+    </div>
   </section>
 
-  <section class="section cta">
+  <section class="band band--cta" aria-labelledby="ctaTitle">
     <span class="mono reveal">Next</span>
-    <h2 class="reveal">Stars and sun for heading.<br>No GPS dependency.</h2>
-    <a class="btn reveal" href="tests.html" data-magnet><span>See tests &amp; demos</span><i>→</i></a>
+    <h2 class="band__title reveal" id="ctaTitle">Stars and sun for heading. No GPS dependency.</h2>
+    <div class="phero__actions reveal">
+      <a class="btn btn--sm" href="contact.html"><span>Discuss integration</span><i aria-hidden="true">→</i></a>
+      <a class="pbtn" href="tests.html"><span>See tests &amp; demos</span><i aria-hidden="true">→</i></a>
+    </div>
   </section>
 </main>
 
-<footer class="footer mono">
-  <span>FNAV — Full GPS-Denied Navigation. Passive. Unjammable. Zero RF.</span>
-  <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
-  <a href="#top">Back to top ↑</a>
+<!-- FOOTER: big logo left, contacts right, thin bottom row (Figma "Footer") -->
+<footer class="xfoot">
+  <div class="xfoot__top">
+    <a class="xfoot__logo" href="#top" aria-label="FNAV Systems, back to top"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
+    <div class="xfoot__links">
+      <p class="xfoot__h">Connect with us</p>
+      <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+      <nav aria-label="Footer">
+        <a href="product.html">Product</a>
+        <a href="tests.html">Tests</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </div>
+  <div class="xfoot__bottom">
+    <span>FNAV Systems — a Ukrainian defense technology startup</span>
+    <a href="#top">Back to top ↑</a>
+  </div>
 </footer>
 
 <script src="main.js" defer></script>

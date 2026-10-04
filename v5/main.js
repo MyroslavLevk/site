@@ -128,6 +128,9 @@
       locBox.hidden = env !== 'sea'; // only the sea has locations to choose from
       if (jump) document.getElementById('flight').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
     };
+    // other pages link here as index.html?env=sea#flight: open the demo in that environment
+    const asked = new URLSearchParams(location.search).get('env');
+    if (asked === 'air' || asked === 'sea' || asked === 'ground') setEnv(asked);
     envButtons.forEach((b) => {
       const isPanel = b.matches('.env__panel, .pcard'); // cards jump down to the demo
       b.addEventListener('click', () => setEnv(b.dataset.env, isPanel));

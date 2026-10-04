@@ -1243,3 +1243,83 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 @media (max-width: 860px) {
   .xray { max-height: 300px; }
 }
+
+/* ---------- logo mark (vector trace of the FNAV logo, img/logo.svg) ---------- */
+.mark { display: inline-block; fill: currentColor; vertical-align: middle; }
+.nav__logo { display: inline-flex; align-items: center; gap: 10px; }
+.nav__logo .mark { width: 40px; height: 14px; }
+.xfoot__logo { display: inline-flex; flex-wrap: wrap; align-items: flex-end; gap: .12em .2em; }
+.xfoot__logo .mark { width: 1.9em; height: .67em; margin: 0 .12em .08em 0; color: var(--accent); }
+
+/* ---------- inner pages: page hero, text left and art right ---------- */
+.phero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 80px);
+  padding: clamp(120px, 14vw, 180px) var(--pad) 0;
+}
+.phero--solo { grid-template-columns: minmax(0, 1fr); }
+.phero__text { display: grid; gap: 20px; justify-items: start; }
+.phero h1 { font-size: clamp(44px, 6.4vw, 96px); font-weight: 600; line-height: .95; letter-spacing: -.045em; max-width: 12ch; text-wrap: balance; }
+.phero__lead { max-width: 46ch; color: var(--muted); font-size: clamp(17px, 1.4vw, 21px); line-height: 1.45; }
+.phero__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
+.phero__art svg { max-height: 300px; }
+.v5s--first { padding-top: clamp(56px, 7vw, 96px); }
+.fig b.fig__text { font-size: clamp(28px, 3vw, 44px); line-height: 1.6; }
+
+/* ---------- product photos: shots on a light plate, so the white backgrounds stay clean ---------- */
+.pcard--photo { cursor: default; }
+.shot {
+  display: block;
+  height: clamp(190px, 17vw, 240px);
+  padding: 18px 22px;
+  border-radius: 31px 31px 0 0;
+  background: radial-gradient(120% 90% at 50% 40%, #ffffff 55%, #ecebe5 100%);
+  overflow: hidden;
+}
+.shot img { display: block; width: 100%; height: 100%; object-fit: contain; transition: transform .7s var(--ease); }
+.pcard--photo:hover .shot img { transform: scale(1.04); }
+a.pcard__cta { align-self: flex-start; transition: color .3s; }
+a.pcard__cta:hover { color: var(--accent); }
+
+/* ---------- compatibility tiles: 3 x 2, compact ---------- */
+.tiles--3 { grid-template-columns: repeat(3, 1fr); }
+.tiles--3 .tile { min-height: 0; gap: 18px; padding: 18px; }
+
+/* ---------- call-to-action band ---------- */
+.band--cta { gap: 22px; text-align: center; }
+.band--cta .band__title { max-width: 22ch; }
+.band__p { max-width: 52ch; color: var(--muted); }
+
+/* ---------- tests: facts inside the cards, the footer link ---------- */
+.hcard .facts { margin: 4px 0 0; }
+.hcard .facts > div { grid-template-columns: 110px 1fr; padding: 10px 0; }
+.hcard .facts dd { font-size: 15px; }
+a.hcard__foot { transition: color .3s; }
+a.hcard__foot:hover { color: var(--accent); }
+
+/* ---------- contact: what to send ---------- */
+.asks { display: grid; gap: 10px; text-transform: none; letter-spacing: .02em; font-size: 14px; color: var(--fg); }
+.asks li { padding-left: 18px; position: relative; }
+.asks li::before { content: ""; position: absolute; left: 0; top: .55em; width: 8px; height: 1px; background: var(--accent); }
+
+@media (max-width: 860px) {
+  .phero { grid-template-columns: 1fr; padding-top: 110px; }
+  .tiles--3 { grid-template-columns: repeat(2, 1fr); }
+  .hcard .facts > div { grid-template-columns: 1fr; gap: 2px; }
+}
+@media (max-width: 600px) {
+  .nav__logo .mark { width: 30px; height: 11px; }
+}
+
+/* ---------- slimmer nav bar ---------- */
+.v5 .nav { padding: 4px 5px 4px 14px; gap: 24px; }
+.v5 .nav__links { font-size: 14px; }
+.v5 .theme { width: 44px; height: 26px; padding: 3px; }
+.v5 .theme__knob { width: 18px; height: 18px; box-shadow: inset -6px -2px 0 0 var(--fg); }
+.v5[data-theme="light"] .theme__knob, [data-theme="light"] .v5 .theme__knob { transform: translateX(18px); box-shadow: inset 0 0 0 0 var(--fg); }
+@media (max-width: 760px) {
+  .v5 .nav { gap: 10px; padding-left: 12px; }
+  .v5 .nav__links { gap: 12px; font-size: 13px; }
+}
