@@ -1323,3 +1323,25 @@ a.hcard__foot:hover { color: var(--accent); }
   .v5 .nav { gap: 10px; padding-left: 12px; }
   .v5 .nav__links { gap: 12px; font-size: 13px; }
 }
+
+/* ---------- product: flipping between the x-ray platforms ---------- */
+.xray__nav { display: none; align-items: center; justify-content: center; gap: 14px; margin-top: 6px; }
+.xray.is-on + .xray__nav { display: flex; }
+.xray__btn {
+  display: grid; place-items: center;
+  width: 36px; height: 36px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg);
+  font: 16px/1 "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  transition: border-color .3s, color .3s;
+}
+.xray__btn:hover { border-color: var(--accent); color: var(--accent); }
+.xray__name { min-width: 22ch; text-align: center; color: var(--fg); }
+.xray__dots { display: flex; gap: 6px; }
+.xray__dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); transition: background .3s, width .3s; }
+.xray__dots i.is-on { width: 18px; border-radius: 3px; background: var(--accent); }
+.xray[data-models~="usv"] { cursor: grab; touch-action: pan-y; }
+@media (max-width: 600px) { .xray__name { min-width: 0; } }

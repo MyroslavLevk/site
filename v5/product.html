@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body class="v2 v5">
 
@@ -43,8 +43,14 @@
         <a class="pbtn" href="tests.html"><span>Test record</span><i aria-hidden="true">→</i></a>
       </div>
     </div>
+    <!-- x-ray platforms (hero3d.js): UAV, USV and UGV, flipped by the arrows, a swipe, the arrow keys or on their own -->
     <figure class="schematic phero__art reveal">
-      <svg viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
+      <div class="xray" id="xray" data-models="uav usv ugv" aria-label="FNAV module on three platforms; use the arrow keys to switch">
+        <canvas aria-label="The FNAV navigation module on a drone, a boat and a tracked ground vehicle: each drawn see-through, the module solid on top"></canvas>
+        <svg class="xray__over" aria-hidden="true"><path class="xray__lead"/></svg>
+        <span class="xray__pin xray__pin--sensor" data-pin="sensor" aria-hidden="true"><i class="mono">Sky sensor</i></span>
+        <span class="xray__pin xray__pin--module" data-pin="module" aria-hidden="true"><i class="mono"><b>FNAV module</b>100 g · MAVLink</i></span>
+        <svg class="xray__fallback" viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
             <!-- sky sensor view -->
             <path class="sch__dash" d="M150 96L112 14M196 96l38-82"/>
             <text class="sch__label" x="173" y="12" text-anchor="middle">SKY SENSOR</text>
@@ -68,7 +74,14 @@
             <path class="sch__dim" d="M300 74v100M295 74h10M295 174h10"/>
             <text class="sch__label" x="310" y="128">10 cm</text>
           </svg>
-      <figcaption class="mono">Navigation Module v1 — schematic, appearance illustrative</figcaption>
+      </div>
+      <div class="xray__nav">
+        <button class="xray__btn" type="button" data-step="-1" aria-label="Previous platform">←</button>
+        <span class="xray__name mono" aria-live="polite">Fixed-wing UAV</span>
+        <span class="xray__dots" aria-hidden="true"><i class="is-on"></i><i></i><i></i></span>
+        <button class="xray__btn" type="button" data-step="1" aria-label="Next platform">→</button>
+      </div>
+      <figcaption class="mono">Navigation Module v1 on UAV, USV and UGV — appearance illustrative</figcaption>
     </figure>
   </section>
 
@@ -222,6 +235,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=5" defer></script>
+<script src="main.js?v=6" defer></script>
 </body>
 </html>
