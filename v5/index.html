@@ -421,7 +421,7 @@
     <a class="pbtn pbtn--center reveal" href="tests.html"><span>Test record</span><i aria-hidden="true">→</i></a>
   </section>
 
-  <!-- 04 DEMO: unchanged scene and controls, framed by corner brackets, legend underneath -->
+  <!-- 04 DEMO: unchanged scene and controls, framed by corner brackets -->
   <section class="section v5s" id="flight">
     <div class="shead reveal">
       <div class="shead__text">
@@ -465,12 +465,6 @@
       </div>
     </div>
     </div>
-    <dl class="legend mono reveal">
-      <div><dt>GPS</dt><dd>No signal — jammed or denied</dd></div>
-      <div><dt>NAV</dt><dd>StarNav by night · SolarNav by day</dd></div>
-      <div><dt>MODE</dt><dd>Autonomous, no operator</dd></div>
-      <div><dt>DIST</dt><dd>Distance covered since start</dd></div>
-    </dl>
   </section>
 
   <!-- FAQ: accordion left, "can't find an answer" right (Figma "FAQs") -->
@@ -508,24 +502,20 @@
     </div>
   </section>
 
-  <!-- 05 CONTACT: text left, bracketed form right (Figma "Our history") -->
+  <!-- 05 CONTACT: text left, bracketed contact card right (Figma "Our history") -->
   <section class="section v5s" id="contact">
     <div class="split split--contact">
       <div class="split__text reveal">
         <span class="mono">05 — Contact</span>
         <h2>Discuss integration.</h2>
         <p>Collaboration, testing or deployment. Accuracy figures and pricing on request.</p>
-        <p class="mono">We respond within 24h</p>
-        <a class="pbtn" href="mailto:office@fnav-systems.com"><span>office@fnav-systems.com</span><i aria-hidden="true">→</i></a>
       </div>
-      <form class="cform bcard reveal" id="contactForm">
-        <label><span class="mono">Name</span><input name="name" autocomplete="name" required></label>
-        <label><span class="mono">Company</span><input name="org" autocomplete="organization"></label>
-        <label class="cform__wide"><span class="mono">Email</span><input name="email" type="email" autocomplete="email" required></label>
-        <label class="cform__wide"><span class="mono">Message</span><textarea name="message" rows="4" required></textarea></label>
-        <input type="hidden" name="subject" value="Integration enquiry">
-        <button class="btn btn--sm" type="submit"><span>Get in touch</span><i aria-hidden="true">→</i></button>
-      </form>
+      <div class="ccard bcard reveal">
+        <div><span class="mono">Email</span><a class="ccard__mail" href="mailto:office@fnav-systems.com">office@fnav-systems.com</a></div>
+        <div><span class="mono">Signal</span><p>Available on request</p></div>
+        <div><span class="mono">Response</span><p>We respond within 24h</p></div>
+        <a class="btn btn--sm" href="mailto:office@fnav-systems.com"><span>Get in touch</span><i aria-hidden="true">→</i></a>
+      </div>
     </div>
   </section>
 </main>

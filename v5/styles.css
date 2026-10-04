@@ -1127,12 +1127,8 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .v5 .compare .win { color: var(--accent); }
 .v5 .compare__row > :last-child { margin-right: -24px; padding-inline: 16px 24px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* ---------- 04: demo framed, legend below ---------- */
+/* ---------- 04: demo framed ---------- */
 .frame--demo .demo { border-color: var(--line-2); border-radius: 12px; }
-.legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 24px; margin: 20px 0 0; }
-.legend div { display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
-.legend dt { color: var(--accent); }
-.legend dd { margin: 0; color: var(--fg); text-transform: none; letter-spacing: .02em; }
 .v5 .tbtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- FAQ (Figma "FAQs") ---------- */
@@ -1173,29 +1169,15 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .faq__mail { border-bottom: 1px solid var(--line); color: var(--muted); font: 500 clamp(16px, 1.6vw, 22px) "JetBrains Mono", ui-monospace, monospace; transition: color .3s, border-color .3s; }
 .faq__mail:hover { color: var(--accent); border-color: var(--accent); }
 
-/* ---------- 05: contact (Figma "Our history": text left, big box right) ---------- */
-.split--contact { margin-top: 0; align-items: start; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+/* ---------- 05: contact (Figma "Our history": text left, box right) ---------- */
+.split--contact { margin-top: 0; align-items: start; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .split--contact .split__text { padding-top: 12px; }
-.split__text > p.mono { font-size: 12px; }
-.cform { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 20px; padding: clamp(24px, 3vw, 40px); border-radius: 20px; }
-.cform label { display: grid; gap: 8px; }
-.cform__wide { grid-column: 1 / -1; }
-.cform input, .cform textarea {
-  width: 100%;
-  padding: 10px 0;
-  border: 0;
-  border-bottom: 1px solid var(--line-2);
-  border-radius: 0;
-  background: transparent;
-  color: var(--fg);
-  font: inherit;
-  resize: vertical;
-  outline: none;
-  transition: border-color .3s;
-}
-.cform input:focus, .cform textarea:focus { border-color: var(--accent); }
-.cform label:focus-within .mono { color: var(--accent); }
-.cform .btn { justify-self: start; border: 0; border-radius: 999px; font-family: inherit; cursor: pointer; }
+.ccard { display: grid; gap: 22px; justify-items: start; padding: clamp(24px, 3vw, 40px); border-radius: 20px; }
+.ccard > div { display: grid; gap: 6px; width: 100%; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.ccard__mail { font-size: clamp(20px, 2vw, 28px); font-weight: 500; letter-spacing: -.02em; transition: color .3s; }
+.ccard__mail:hover { color: var(--accent); }
+.ccard .btn { border-radius: 999px; }
+.contact--solo { grid-template-columns: 1fr; }
 
 /* ---------- footer (Figma "Footer": black, big logo, contacts) ---------- */
 .xfoot { margin-top: var(--section-gap); padding: 64px var(--pad) 24px; background: #000; color: #f2f3f4; }
@@ -1238,7 +1220,6 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   .faq__grid { grid-template-columns: 1fr; }
   .faq__ask { order: -1; }
   .faq__q { font-size: 64px; }
-  .legend { grid-template-columns: 1fr 1fr; }
   .xfoot__links { justify-items: start; text-align: left; }
   .v5 .compare__row > :last-child { margin-right: 0; padding-inline: 0; background: none; }
   .v5 .compare__row > * { display: block; padding-block: 0; }
@@ -1256,7 +1237,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   /* validation cards scroll sideways with snap */
   .awards { display: flex; justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; gap: 16px; padding: 8px 8px 16px; }
   .award { flex: 0 0 78%; scroll-snap-align: center; }
-  .cform, .specline { grid-template-columns: 1fr; }
+  .specline { grid-template-columns: 1fr; }
   .tiles { --g: 10px; }
   .tile { min-height: 0; gap: 16px; padding: 16px 14px; border-radius: 14px; }
   .tile p { font-size: 13px; }
