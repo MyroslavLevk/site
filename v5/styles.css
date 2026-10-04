@@ -1250,7 +1250,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .nav__logo { display: inline-flex; align-items: center; gap: 10px; }
 .nav__logo .mark { width: 40px; height: 14px; }
 .xfoot__logo { display: inline-flex; flex-wrap: wrap; align-items: flex-end; gap: .12em .2em; }
-.xfoot__logo .mark { width: 1.9em; height: .67em; margin: 0 .12em .08em 0; color: var(--accent); }
+.xfoot__logo .mark { width: 1.9em; height: .67em; margin: 0 .12em .08em 0; color: #f2f3f4; } /* the logo is white */
 
 /* ---------- inner pages: page hero, text left and art right ---------- */
 .phero {
@@ -1374,3 +1374,20 @@ a.hcard__foot:hover { color: var(--accent); }
 .cfacts a { transition: color .3s; }
 .cfacts a:hover { color: var(--accent); }
 @media (max-width: 600px) { .cform { grid-template-columns: 1fr; } }
+
+/* ---------- brand: the logo mark ahead of each page's first line, and a big faint one behind the home hero ---------- */
+.brandline { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.mark--lead { width: 48px; height: 17px; color: var(--fg); flex: none; }
+.hero__brand {
+  position: absolute;
+  left: 50%; top: 42%;
+  width: min(96vw, 1400px);
+  height: auto;
+  aspect-ratio: 205.7 / 72.5;
+  translate: -50% -50%;
+  color: var(--fg);
+  opacity: calc(.055 * (1 - var(--p) * 1.4));
+  pointer-events: none;
+}
+[data-theme="light"] .hero__brand { opacity: calc(.055 * (1 - var(--p) * 1.4)); }
+@media (max-width: 860px) { .hero__brand { top: 30%; width: 120vw; } }
