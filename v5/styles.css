@@ -873,47 +873,37 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .pbtn:hover i { transform: translateX(5px); }
 .pbtn--center { justify-self: center; margin-top: 8px; }
 
-/* ---------- bracket frame: L-arms in the four corners, T-ticks over the gaps ---------- */
+/* ---------- bracket frame. Every card inside draws its own four corner arms, set out to the
+   frame edge and to the middle of the gaps; next to each other they add up to the frame's corner
+   Ls, the Ts over the gaps and the cross in a 2x2 grid. Hovering a card lights only its arms. ---------- */
 .frame {
-  --fp: clamp(12px, 1.8vw, 24px); /* space between the brackets and the content */
-  --g: clamp(16px, 2vw, 28px);    /* gap between the cards inside */
+  --g: clamp(20px, 2.4vw, 36px);  /* gap between the cards */
+  --fp: calc(var(--g) / 2);       /* frame edge = half a gap away, like the middle of a gap */
+  --arm: 28px;
   position: relative;
   padding: var(--fp);
 }
-.frame::before {
+.hl > *, .tiles > *, .cards3 > * { position: relative; }
+.hl > *::before, .tiles > *::before, .cards3 > *::before, .frame--demo::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: calc(var(--g) / -2 - 1px);
   pointer-events: none;
-  --c: var(--bracket);
+  --c: color-mix(in srgb, var(--bracket) 80%, transparent);
   background:
-    linear-gradient(var(--c), var(--c)) left top / var(--bl) 1px,
-    linear-gradient(var(--c), var(--c)) left top / 1px var(--bl),
-    linear-gradient(var(--c), var(--c)) right top / var(--bl) 1px,
-    linear-gradient(var(--c), var(--c)) right top / 1px var(--bl),
-    linear-gradient(var(--c), var(--c)) left bottom / var(--bl) 1px,
-    linear-gradient(var(--c), var(--c)) left bottom / 1px var(--bl),
-    linear-gradient(var(--c), var(--c)) right bottom / var(--bl) 1px,
-    linear-gradient(var(--c), var(--c)) right bottom / 1px var(--bl);
+    linear-gradient(var(--c), var(--c)) left top / var(--arm) 1px,
+    linear-gradient(var(--c), var(--c)) left top / 1px var(--arm),
+    linear-gradient(var(--c), var(--c)) right top / var(--arm) 1px,
+    linear-gradient(var(--c), var(--c)) right top / 1px var(--arm),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--arm) 1px,
+    linear-gradient(var(--c), var(--c)) left bottom / 1px var(--arm),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--arm) 1px,
+    linear-gradient(var(--c), var(--c)) right bottom / 1px var(--arm);
   background-repeat: no-repeat;
-  opacity: .8;
 }
-/* a T over each gap between cards: a 52px bar on the edge, a stem pointing in */
-.tick { position: absolute; left: 50%; width: 52px; height: var(--bl); translate: -50% 0; pointer-events: none; }
-.tick::before, .tick::after { content: ""; position: absolute; background: var(--bracket); opacity: .8; }
-.tick::before { left: 0; right: 0; height: 1px; }
-.tick::after { left: 50%; width: 1px; height: 100%; }
-.tick--top { top: 0; }
-.tick--top::before, .tick--top::after { top: 0; }
-.tick--bottom { bottom: 0; }
-.tick--bottom::before, .tick--bottom::after { bottom: 0; }
-.frame--3 .tick--a { left: calc(var(--fp) + (100% - 2 * var(--fp) - 2 * var(--g)) / 3 + var(--g) / 2); }
-.frame--3 .tick--b { left: calc(100% - var(--fp) - (100% - 2 * var(--fp) - 2 * var(--g)) / 3 - var(--g) / 2); }
-/* a cross where the gaps of a 2x2 grid meet */
-.cross { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; translate: -50% -50%; pointer-events: none; }
-.cross::before, .cross::after { content: ""; position: absolute; background: var(--bracket); opacity: .8; }
-.cross::before { left: 0; right: 0; top: 50%; height: 1px; }
-.cross::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+.frame--demo::before { inset: 0; --arm: var(--bl); }
+.hl > :hover::before, .tiles > :hover::before, .cards3 > :hover::before,
+.cards3 > :focus-visible::before { --c: var(--accent); }
 
 /* ---------- bracket card: thin border, short corner brackets that turn orange on hover ---------- */
 .bcard {
@@ -997,10 +987,10 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 
 /* ---------- 01: two highlight cards (Figma "Current Projects") ---------- */
 .hl { display: grid; grid-template-columns: 1fr 1fr; gap: var(--g); }
-.hcard { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; transition: border-color .3s; }
+.hcard { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; transition: border-color .3s; }
 /* only the card under the pointer lights up, never the frame around the group */
 .hcard:hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
-.hcard__media { position: relative; height: clamp(180px, 16vw, 220px); }
+.hcard__media { position: relative; height: clamp(180px, 16vw, 220px); overflow: hidden; border-radius: 15px 15px 0 0; }
 .hcard__media--night { background: #0b111c; }
 .hcard__media--day { background: #d6e3ea; }
 .hcard__media .sys__sky { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -1011,6 +1001,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   gap: 12px;
   padding: 20px;
   background: var(--panel);
+  border-radius: 0 0 15px 15px;
 }
 .hcard__body h3 { font-size: clamp(24px, 2.2vw, 30px); font-weight: 500; }
 .hcard__body p { color: var(--muted); font-size: 15px; }
@@ -1040,7 +1031,6 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   flex-direction: column;
   border: 1px solid var(--line-2);
   border-radius: 32px;
-  overflow: hidden;
   background: var(--card-bg);
   cursor: pointer;
   outline: none;
@@ -1048,7 +1038,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 }
 .pcard:hover, .pcard:focus-visible, .pcard.is-active { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .v5 .pcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.pcard__media { position: relative; height: clamp(170px, 15vw, 210px); overflow: hidden; }
+.pcard__media { position: relative; height: clamp(170px, 15vw, 210px); overflow: hidden; border-radius: 31px 31px 0 0; }
 /* the scenes were drawn for a 520-high panel: show their lower part (horizon and craft) */
 .pcard__media .env__bg { position: absolute; inset: auto 0 0 0; width: 100%; height: 260%; }
 .pcard__media .env__fg { position: absolute; left: 50%; top: auto; bottom: 0; height: 260%; width: auto; transform: translateX(-50%); }
@@ -1209,7 +1199,6 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 @media (max-width: 860px) {
   .shead { flex-direction: column; align-items: flex-start; }
   .hl, .cards3 { grid-template-columns: 1fr; }
-  .frame--2 > .tick, .frame--3 > .tick, .cross { display: none; }
   .benefits { grid-template-columns: 1fr; gap: 28px; }
   .benefit + .benefit { border-left: 0; }
   .faq__grid { grid-template-columns: 1fr; }
