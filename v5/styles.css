@@ -873,9 +873,10 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 .pbtn:hover i { transform: translateX(5px); }
 .pbtn--center { justify-self: center; margin-top: 8px; }
 
-/* ---------- bracket frame. Every card inside draws its own four corner arms, set out to the
-   frame edge and to the middle of the gaps; next to each other they add up to the frame's corner
-   Ls, the Ts over the gaps and the cross in a 2x2 grid. Hovering a card lights only its arms. ---------- */
+/* ---------- bracket frame. Every card inside draws arms at its four corners, set out to the
+   frame edge and to the middle of the gaps. Only the four outer corners of the frame are Ls; every
+   other mark is one straight stick along the frame edge (made of the two neighbours' arms), and the
+   middle of a 2x2 grid gets a horizontal stick. Hovering a card lights only its own arms. ---------- */
 .frame {
   --g: clamp(20px, 2.4vw, 36px);  /* gap between the cards */
   --fp: calc(var(--g) / 2);       /* frame edge = half a gap away, like the middle of a gap */
@@ -883,27 +884,57 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
   position: relative;
   padding: var(--fp);
 }
-.hl > *, .tiles > *, .cards3 > * { position: relative; }
-.hl > *::before, .tiles > *::before, .cards3 > *::before, .frame--demo::before {
+.hl > *, .tiles > *, .cards3 > * {
+  position: relative;
+  /* per corner: horizontal (h) and vertical (v) arm length; vertical arms only where a corner
+     lies on the frame's left or right edge */
+  --tl-h: var(--arm); --tr-h: var(--arm); --bl-h: var(--arm); --br-h: var(--arm);
+  --tl-v: 0px; --tr-v: 0px; --bl-v: 0px; --br-v: 0px;
+}
+.hl > *::before, .tiles > *::before, .cards3 > *::before {
   content: "";
   position: absolute;
   inset: calc(var(--g) / -2 - 1px);
   pointer-events: none;
   --c: color-mix(in srgb, var(--bracket) 80%, transparent);
   background:
-    linear-gradient(var(--c), var(--c)) left top / var(--arm) 1px,
-    linear-gradient(var(--c), var(--c)) left top / 1px var(--arm),
-    linear-gradient(var(--c), var(--c)) right top / var(--arm) 1px,
-    linear-gradient(var(--c), var(--c)) right top / 1px var(--arm),
-    linear-gradient(var(--c), var(--c)) left bottom / var(--arm) 1px,
-    linear-gradient(var(--c), var(--c)) left bottom / 1px var(--arm),
-    linear-gradient(var(--c), var(--c)) right bottom / var(--arm) 1px,
-    linear-gradient(var(--c), var(--c)) right bottom / 1px var(--arm);
+    linear-gradient(var(--c), var(--c)) left top / var(--tl-h) 1px,
+    linear-gradient(var(--c), var(--c)) left top / 1px var(--tl-v),
+    linear-gradient(var(--c), var(--c)) right top / var(--tr-h) 1px,
+    linear-gradient(var(--c), var(--c)) right top / 1px var(--tr-v),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--bl-h) 1px,
+    linear-gradient(var(--c), var(--c)) left bottom / 1px var(--bl-v),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--br-h) 1px,
+    linear-gradient(var(--c), var(--c)) right bottom / 1px var(--br-v);
   background-repeat: no-repeat;
 }
-.frame--demo::before { inset: 0; --arm: var(--bl); }
 .hl > :hover::before, .tiles > :hover::before, .cards3 > :hover::before,
 .cards3 > :focus-visible::before { --c: var(--accent); }
+/* one row: the outer cards close the frame's sides */
+.hl > :first-child, .cards3 > :first-child { --tl-v: var(--arm); --bl-v: var(--arm); }
+.hl > :last-child, .cards3 > :last-child { --tr-v: var(--arm); --br-v: var(--arm); }
+/* 2x2: corners on the left / right edge between the rows are vertical sticks */
+.tiles > :nth-child(1) { --tl-v: var(--arm); --bl-v: var(--arm); --bl-h: 0px; }
+.tiles > :nth-child(2) { --tr-v: var(--arm); --br-v: var(--arm); --br-h: 0px; }
+.tiles > :nth-child(3) { --tl-v: var(--arm); --bl-v: var(--arm); --tl-h: 0px; }
+.tiles > :nth-child(4) { --tr-v: var(--arm); --br-v: var(--arm); --tr-h: 0px; }
+.frame--demo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --c: color-mix(in srgb, var(--bracket) 80%, transparent);
+  background:
+    linear-gradient(var(--c), var(--c)) left top / var(--bl) 1px,
+    linear-gradient(var(--c), var(--c)) left top / 1px var(--bl),
+    linear-gradient(var(--c), var(--c)) right top / var(--bl) 1px,
+    linear-gradient(var(--c), var(--c)) right top / 1px var(--bl),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--bl) 1px,
+    linear-gradient(var(--c), var(--c)) left bottom / 1px var(--bl),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--bl) 1px,
+    linear-gradient(var(--c), var(--c)) right bottom / 1px var(--bl);
+  background-repeat: no-repeat;
+}
 
 /* ---------- bracket card: thin border, short corner brackets that turn orange on hover ---------- */
 .bcard {
@@ -1199,6 +1230,9 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); font-weight: 600; letter-spacing: -.02
 @media (max-width: 860px) {
   .shead { flex-direction: column; align-items: flex-start; }
   .hl, .cards3 { grid-template-columns: 1fr; }
+  .hl > *, .cards3 > * { --tl-h: 0px; --tr-h: 0px; --bl-h: 0px; --br-h: 0px; --tl-v: var(--arm); --tr-v: var(--arm); --bl-v: var(--arm); --br-v: var(--arm); }
+  .hl > :first-child, .cards3 > :first-child { --tl-h: var(--arm); --tr-h: var(--arm); }
+  .hl > :last-child, .cards3 > :last-child { --bl-h: var(--arm); --br-h: var(--arm); }
   .benefits { grid-template-columns: 1fr; gap: 28px; }
   .benefit + .benefit { border-left: 0; }
   .faq__grid { grid-template-columns: 1fr; }
