@@ -7,7 +7,9 @@
   const hud = document.getElementById('hudCanvas');
   const h2 = hud.getContext('2d');
   const el = (id) => document.getElementById(id);
-  const spdEl = el('spd'), altEl = el('alt'), altBox = el('altBox'), objEl = el('obj'), distEl = el('dist'), modeEl = el('navMode');
+  const spdEl = el('spd'), altEl = el('alt'), objEl = el('obj'), distEl = el('dist'), modeEl = el('navMode');
+  const altLbl = el('altLbl'), altUnit = el('altUnit'), refNote = el('refNote'), fpsEl = el('simFps'), logEl = el('simLog');
+  const map = el('miniMap'), m2 = map && map.getContext('2d');
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -21,24 +23,26 @@
     el('hint').textContent = 'WebGL is not available on this device';
     return;
   }
-  const DPR = Math.min(devicePixelRatio || 1, 1.75); // HUD canvas; the 3D view follows the quality level
-  /* Quality levels. Phones and weak machines start lower; while the demo runs, the frame
-     rate is measured and the level is stepped down (never up) if it stays low.
+  const DPR = Math.min(devicePixelRatio || 1, 1.5); // HUD canvases; the 3D view follows the quality level
+  /* Quality levels (the Eco / Std / Max switch beside the view). Phones and weak machines start
+     on Eco; while the demo runs, the frame rate is measured and, unless the visitor picked a
+     level, it is stepped down (never up) if it stays low.
      dpr = render resolution cap, shadow = shadow map size (0 = none), density = share of
-     scattered objects, litter = share of battlefield litter, fine = dense ground / water grids. */
+     scattered objects, litter = share of battlefield litter, fine = dense ground / water grids,
+     fps = frame cap: the view is a slow onboard camera, 30 fps reads smooth and halves the work. */
   const QUALITY = [
-    { dpr: 1, shadow: 0, density: 0.45, litter: 0.35, fine: false },
-    { dpr: 1.25, shadow: 1024, density: 0.7, litter: 0.6, fine: false },
-    { dpr: 1.75, shadow: 2048, density: 1, litter: 1, fine: true },
+    { dpr: 1, shadow: 0, density: 0.5, litter: 0.4, fine: false, fps: 30 },
+    { dpr: 1.5, shadow: 1024, density: 1, litter: 0.85, fine: false, fps: 30 },
+    { dpr: 1.75, shadow: 2048, density: 1, litter: 1, fine: true, fps: 60 },
   ];
   const phone = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 600;
   const weak = (navigator.deviceMemory || 8) <= 2 || (navigator.hardwareConcurrency || 8) <= 2;
-  let quality = weak ? 0 : phone ? 1 : 2, Q = QUALITY[quality];
+  let quality = weak || phone ? 0 : 1, Q = QUALITY[quality], userQ = false;
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap; // the shadows are faint under the overcast: the soft filter cost more than it showed
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x000000, 0.014);
@@ -117,7 +121,7 @@
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
-      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < ${quality === 2 ? 5 : 4}; i++) { v += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
+      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < ${weak || phone ? 4 : 5}; i++) { v += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
       void main(){
         vec3 d = normalize(vDir);
         if (d.y <= 0.0) discard;
@@ -1771,7 +1775,7 @@
     let y = terrainH(x, s, true);
     if (terrA) for (const [dx, ds] of [[w, 0], [-w, 0], [0, w], [0, -w]]) y = Math.min(y, terrainH(x + dx, s + ds, true));
     o.position.set(x, y, dist - s);
-    Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6) });
+    Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6), thr: 0, logged: false });
     o.visible = true;
     bindInst(o);
   }
@@ -2154,10 +2158,11 @@
     cu.uSunDir.value.copy(SKY_POS).normalize();
     cu.uSunCol.value.set(day ? 0xffe2b0 : 0x55607a);
     modeEl.textContent = day ? 'SOLARNAV' : 'STARNAV';
-    altBox.firstChild.textContent = sea ? 'SWELL ' : envName === 'ground' ? 'TILT ' : 'ALT ';
-    altBox.lastChild.textContent = envName === 'ground' ? '°' : ' m';
+    altLbl.textContent = sea ? 'Swell' : envName === 'ground' ? 'Tilt' : 'Altitude';
+    altUnit.textContent = envName === 'ground' ? '°' : 'm';
+    refNote.textContent = day ? 'Sun reference locked' : `${navStars.length} star references locked`;
     const s = getComputedStyle(root);
-    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#161a12' : '#e9e6d6' };
+    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#161a12' : '#e9e6d6', fg: s.getPropertyValue('--fg').trim() };
     if (!raf) { pose(); render(); }
   }
   document.addEventListener('themechange', applyLook); // only the accent colour follows the site theme
@@ -2174,6 +2179,7 @@
     U.ash.value.set(-1e6, -1e6, -1e6, -1e6);
     U.roadOn.value = U.wet.value = name === 'ground' ? 1 : 0;
     fpsWarm = 2.5;
+    if (logEl) { logEl.innerHTML = '<li class="dlog__empty">Waiting for the first obstacle…</li>'; logged = 0; }
     loadModels(name);
     if (name !== 'sea') loadGrass();
     objects.forEach((o) => { if (o.visible) release(o); });
@@ -2406,7 +2412,7 @@
     const cx = W / 2, cy = H / 2;
 
     // sky references the navigator is locked on
-    const refs = day ? [disc.position] : navStars;
+    const refs = !layers.refs ? [] : day ? [disc.position] : navStars;
     h2.strokeStyle = h2.fillStyle = colors.accent;
     refs.forEach((p, i) => {
       v.copy(p).applyAxisAngle(Y_AXIS, heading);
@@ -2421,6 +2427,7 @@
 
     // planned route on the surface
     const sea = envName === 'sea';
+    if (layers.route) {
     h2.globalAlpha = 0.9;
     h2.lineWidth = 1.5;
     h2.setLineDash([6, 6]);
@@ -2434,6 +2441,7 @@
     }
     h2.stroke();
     h2.setLineDash([]);
+    }
 
     // detections
     tracked = 0;
@@ -2453,7 +2461,10 @@
       const lat = Math.abs(o.position.x - pathX(u.s));
       const over = !!cfg.overfly && lat < u.w + cfg.margin && pathY(u.s) >= u.h + cfg.overfly;
       const threat = !over && lat < u.w + cfg.margin + 2.5;
+      u.thr = threat ? 2 : over ? 1 : 0;
+      if ((threat || over) && !u.logged && d < 70) { u.logged = true; logDecision(u.cls.label, over ? 'OVERFLY' : 'AVOID', d); }
       if (u.cls.quiet && !threat) continue; // a tree line is not a hundred targets: only trees by the track get a box
+      if (!layers.boxes) continue;
       const col = threat ? colors.accent : colors.ink;
       h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
       h2.strokeStyle = h2.fillStyle = col;
@@ -2496,11 +2507,81 @@
     h2.globalAlpha = 1;
   }
 
+  /* ----- decision log beside the view: each obstacle the planner reacts to, newest on top ----- */
+  const layers = { boxes: true, route: true, refs: true };
+  let logged = 0;
+  function logDecision(label, action, d) {
+    if (!logEl) return;
+    if (!logged++) logEl.textContent = '';
+    const li = document.createElement('li'), t = Math.floor(time);
+    li.innerHTML = `<time>${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}</time><span></span><em></em>`;
+    li.children[1].textContent = `${label} · ${d.toFixed(0)}m`;
+    li.children[2].textContent = action;
+    li.children[2].className = action === 'AVOID' ? 'is-avoid' : '';
+    logEl.prepend(li);
+    while (logEl.children.length > 5) logEl.lastChild.remove();
+  }
+
+  /* ----- top view of the plan beside the view: the route ahead and what stands near it, the
+     platform at the bottom, travel upwards; across is scaled like along ----- */
+  let MW = 0, MH = 0;
+  function drawMap() {
+    if (!m2 || !MW) return;
+    const back = 14, ahead = 120, k = (MH - 12) / (back + ahead), ox = MW / 2, oy = MH - 6 - back * k;
+    const cx = camera.position.x, ink = colors.fg || colors.ink;
+    const X = (x) => ox + (x - cx) * k, Y = (s) => oy - (s - dist) * k;
+    m2.clearRect(0, 0, MW, MH);
+    m2.font = '9px "JetBrains Mono", ui-monospace, monospace';
+    // range rings and the camera's field of view
+    m2.strokeStyle = m2.fillStyle = ink;
+    m2.globalAlpha = 0.18;
+    m2.lineWidth = 1;
+    [50, 100].forEach((r) => {
+      m2.beginPath(); m2.arc(ox, oy, r * k, Math.PI * 1.05, Math.PI * 1.95); m2.stroke();
+      m2.fillText(`${r}m`, ox + 4, oy - r * k - 3);
+    });
+    const half = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), reach = ahead * k;
+    m2.globalAlpha = 0.05;
+    m2.fillStyle = colors.accent;
+    m2.beginPath(); m2.moveTo(ox, oy);
+    m2.lineTo(ox - Math.sin(half) * reach, oy - Math.cos(half) * reach);
+    m2.lineTo(ox + Math.sin(half) * reach, oy - Math.cos(half) * reach);
+    m2.fill();
+    // objects: faint dots, those the route reacts to in orange
+    for (const o of objects) {
+      if (!o.visible) continue;
+      const u = o.userData, s = u.s;
+      if (s < dist - back || s > dist + ahead) continue;
+      const x = X(o.position.x);
+      if (x < -6 || x > MW + 6) continue;
+      const hot = u.thr > 0 && s - dist < 95;
+      m2.globalAlpha = hot ? 0.95 : u.cls.quiet ? 0.22 : 0.45;
+      m2.fillStyle = hot ? colors.accent : ink;
+      m2.beginPath(); m2.arc(x, Y(s), Math.max(1.6, Math.min(u.w * k, 7)), 0, Math.PI * 2); m2.fill();
+      if (hot && u.thr === 2) { m2.globalAlpha = 0.5; m2.strokeStyle = colors.accent; m2.beginPath(); m2.arc(x, Y(s), Math.max(1.6, Math.min(u.w * k, 7)) + 3.5, 0, Math.PI * 2); m2.stroke(); }
+    }
+    // the planned route
+    m2.globalAlpha = 0.95;
+    m2.strokeStyle = colors.accent;
+    m2.lineWidth = 1.5;
+    m2.setLineDash([5, 4]);
+    m2.beginPath();
+    for (let s = dist; s <= dist + ahead; s += 2) { const x = X(pathX(s)), y = Y(s); if (s === dist) m2.moveTo(x, y); else m2.lineTo(x, y); }
+    m2.stroke();
+    m2.setLineDash([]);
+    // the platform
+    m2.fillStyle = colors.accent;
+    m2.beginPath(); m2.moveTo(ox, oy - 8); m2.lineTo(ox + 5, oy + 5); m2.lineTo(ox, oy + 2); m2.lineTo(ox - 5, oy + 5); m2.closePath(); m2.fill();
+    m2.globalAlpha = 1;
+  }
+
   function render() {
     renderer.render(scene, camera);
     drawHud();
+    drawMap();
   }
 
+  const qBtns = document.querySelectorAll('[data-q]');
   function setQuality(level) {
     const was = Q;
     quality = level; Q = QUALITY[level];
@@ -2516,6 +2597,7 @@
       water.geometry.dispose(); water.geometry = waterGrid(...(Q.fine ? [200, 220] : [110, 130]));
     }
     LITTER.forEach(litterQuality);
+    qBtns.forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.q === level)));
   }
   // frame-rate watch: after a warm-up (models and shaders load then), average over 2 s windows
   let fpsWarm = 2, fpsFrames = 0, fpsTime = 0;
@@ -2526,16 +2608,22 @@
     if (fpsTime < 2) return;
     const fps = fpsFrames / fpsTime;
     fpsFrames = fpsTime = 0;
-    if (fps < 40 && quality > 0) { setQuality(quality - 1); fpsWarm = 1.5; }
+    if (fpsEl) fpsEl.textContent = `${Math.round(fps)} fps`;
+    if (!userQ && fps < Q.fps * 0.7 && quality > 0) { setQuality(quality - 1); fpsWarm = 1.5; }
   }
 
+  // frames are capped at the level's rate (a monitor at 144 Hz no longer means 144 renders a
+  // second); the simulation runs at the chosen speed in steps of at most 50 ms
+  let rate = 1;
   function frame(now) {
-    const raw = (now - last) / 1000, dt = clamp(raw, 0.001, 0.05);
-    last = now;
-    watchFps(raw);
-    update(dt);
-    render();
     raf = requestAnimationFrame(frame);
+    const gap = now - last;
+    if (gap < 1000 / Q.fps - 3) return;
+    last = now;
+    const raw = gap / 1000;
+    watchFps(raw);
+    for (let t = clamp(raw, 0.001, 0.1) * rate; t > 1e-4; t -= 0.05) update(Math.min(t, 0.05));
+    render();
   }
 
   // only run the loop while the demo is on screen, the tab is visible and it is not paused
@@ -2552,19 +2640,33 @@
     hud.width = W * DPR; hud.height = H * DPR;
     h2.setTransform(DPR, 0, 0, DPR, 0, 0);
     camera.aspect = W / H;
+    camera.fov = clamp(62 + (1.6 - camera.aspect) * 10, 62, 72); // a narrow view opens up a little so the sides still show
     camera.updateProjectionMatrix();
     if (!raf) render();
   }).observe(box);
+  if (map) new ResizeObserver(() => {
+    MW = map.clientWidth; MH = map.clientHeight;
+    map.width = MW * DPR; map.height = MH * DPR;
+    m2.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (!raf) drawMap();
+  }).observe(map);
 
   /* ----- demo controls ----- */
-  const playBtn = el('simPlay'), modeBtn = el('simMode');
+  const playBtn = el('simPlay');
+  const skyBtns = document.querySelectorAll('[data-sky]'), rateBtns = document.querySelectorAll('[data-rate]');
+  const press = (list, on) => list.forEach((b) => b.setAttribute('aria-pressed', String(on(b))));
   const syncUi = () => {
     playBtn.textContent = paused ? 'Play' : 'Pause';
-    modeBtn.textContent = day ? 'Day · SolarNav' : 'Night · StarNav';
+    press(skyBtns, (b) => (b.dataset.sky === 'day') === day);
+    press(rateBtns, (b) => +b.dataset.rate === rate);
   };
   playBtn.addEventListener('click', () => { paused = !paused; syncUi(); setRunning(); });
-  modeBtn.addEventListener('click', () => { day = !day; syncUi(); applyLook(); });
+  skyBtns.forEach((b) => b.addEventListener('click', () => { day = b.dataset.sky === 'day'; syncUi(); applyLook(); }));
+  rateBtns.forEach((b) => b.addEventListener('click', () => { rate = +b.dataset.rate; syncUi(); }));
+  qBtns.forEach((b) => b.addEventListener('click', () => { userQ = true; if (+b.dataset.q !== quality) setQuality(+b.dataset.q); fpsWarm = 1; }));
+  document.querySelectorAll('[data-layer]').forEach((c) => c.addEventListener('change', () => { layers[c.dataset.layer] = c.checked; if (!raf) render(); }));
   syncUi();
+  qBtns.forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.q === quality)));
 
   LITTER.forEach(litterQuality);
   setEnv(envName);
