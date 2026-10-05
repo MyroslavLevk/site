@@ -1,9 +1,0 @@
-pines.glb, dead.glb by Quaternius, via poly.pizza.
-License: CC0 1.0 (public domain) - https://creativecommons.org/publicdomain/zero/1.0/
-Sources: https://poly.pizza/m/w8ZaiYjK8C  https://poly.pizza/m/F5I0Q7TwO5
-Textures were downscaled for web use; geometry is unchanged.
-
-pack01.glb: 9 trees (Tree_011, 013, 014, 015, 016, 018, 022, 024, 025) from "Low Poly Free Tree Pack 1", CGTrader.
-Source: https://www.cgtrader.com/free-3d-models/exterior/landscape/low-poly-free-tree-pack-1
-License: CGTrader Royalty Free licence (as published on the source page) - not CC0; check its terms before public release.
-Converted from FBX, leaf cards thinned and trunks decimated (1.1M -> 63k triangles), textures downscaled to 512/256 px.

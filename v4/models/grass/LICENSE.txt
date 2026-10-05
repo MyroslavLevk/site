@@ -1,5 +1,0 @@
-chunks.glb  "Simple grass chunks" by 3dhdscan
-            https://sketchfab.com/3d-models/simple-grass-chunks-eb4f6dc9d4e3455ea3435385faf58b60
-            Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
-            Changes: converted to metal/roughness, decimated, textures cut to base colour
-            at 512 px (WebP), meshopt-compressed.
