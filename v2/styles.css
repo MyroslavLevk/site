@@ -1501,3 +1501,6 @@ section[id] { scroll-margin-top: 72px; }
   .v5 .nav { gap: 8px; }
   .v5 .nav__links { gap: 11px; }
 }
+/* one-page nav has a fifth link, Home: on phones the logo drops its word, on the narrowest the logo itself is Home */
+@media (max-width: 600px) { .nav:has(.nav__home) .nav__logo .nav__word { display: none; } }
+@media (max-width: 420px) { .nav__home { display: none; } }

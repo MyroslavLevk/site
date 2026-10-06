@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script" crossorigin>
 </head>
 <body class="v2 v5">
@@ -24,9 +24,10 @@
 <header class="nav" id="nav">
   <a class="nav__logo" href="#top" aria-label="FNAV Systems, back to top"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg><span class="nav__word">FNAV</span></a>
   <nav class="nav__links" aria-label="Main">
-    <a href="#product">Product</a>
+    <a class="nav__home" href="#top">Home</a>
     <a href="#tests">Tests</a>
-    <a href="#flight">Demo</a>
+    <a href="#product">Product</a>
+    <a href="#flight">Simulation</a>
     <a href="#contact">Contact</a>
   </nav>
   <button class="theme" id="theme" type="button" aria-label="Toggle light / dark theme">
@@ -297,41 +298,41 @@
       <div class="shead__text">
         <span class="mono">02 — Where it works</span>
         <h2>One system. Three environments.</h2>
-        <p class="shead__p">Open any card to drive the 3D demo below in that environment.</p>
+        <p class="shead__p">Open any card to drive the 3D simulation below in that environment.</p>
       </div>
-      <a class="pbtn" href="#flight"><span>Open 3D demo</span><i aria-hidden="true">→</i></a>
+      <a class="pbtn" href="#flight"><span>Open 3D simulation</span><i aria-hidden="true">→</i></a>
     </div>
 
     <div class="frame frame--3 reveal">
       <div class="cards3">
-        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="air" aria-label="Open the air 3D demo">
+        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="air" aria-label="Open the air 3D simulation">
           <div class="shot"><img src="img/uav.webp" alt="Fixed-wing UAV" loading="lazy"></div>
           <span class="pcard__go" aria-hidden="true">↗</span>
           <div class="pcard__body">
             <ul class="pills"><li>Air / UAV</li><li class="pill--b">StarNav + SolarNav</li></ul>
             <h3>Fixed-wing, multi-rotor, loitering munitions</h3>
             <p>StarNav + SolarNav output via MAVLink, straight into the autopilot.</p>
-            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+            <span class="pcard__cta mono">Open 3D simulation <i>→</i></span>
           </div>
         </article>
-        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="sea" aria-label="Open the sea 3D demo">
+        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="sea" aria-label="Open the sea 3D simulation">
           <div class="shot"><img src="img/usv.webp" alt="Uncrewed surface vessel" loading="lazy"></div>
           <span class="pcard__go" aria-hidden="true">↗</span>
           <div class="pcard__body">
             <ul class="pills"><li>Sea / USV</li><li class="pill--b">Validated</li></ul>
             <h3>Open-ocean vessels</h3>
             <p>Navigation over open water, where map-matching fails entirely.</p>
-            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+            <span class="pcard__cta mono">Open 3D simulation <i>→</i></span>
           </div>
         </article>
-        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="ground" aria-label="Open the ground 3D demo">
+        <article class="pcard pcard--photo pcard--demo" tabindex="0" role="button" data-env="ground" aria-label="Open the ground 3D simulation">
           <div class="shot"><img src="img/ugv.webp" alt="Tracked uncrewed ground vehicle" loading="lazy"></div>
           <span class="pcard__go" aria-hidden="true">↗</span>
           <div class="pcard__body">
             <ul class="pills"><li>Ground / UGV</li><li class="pill--b">GPS-jammed</li></ul>
             <h3>Ground vehicles and autonomous rovers</h3>
             <p>Holds position in GPS-jammed environments.</p>
-            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+            <span class="pcard__cta mono">Open 3D simulation <i>→</i></span>
           </div>
         </article>
       </div>
@@ -375,14 +376,14 @@
         <span role="rowheader">Error grows over time</span><span role="cell" data-label="GNSS">No</span><span role="cell" data-label="Inertial">Yes</span><span role="cell" data-label="FNAV" class="win">No</span>
       </div>
     </div>
-    <a class="pbtn pbtn--center reveal" href="#flight"><span>See it in the demo</span><i aria-hidden="true">→</i></a>
+    <a class="pbtn pbtn--center reveal" href="#flight"><span>See it in the simulation</span><i aria-hidden="true">→</i></a>
   </section>
 
   <!-- 04 DEMO: unchanged scene and controls, framed by corner brackets -->
   <section class="section v5s" id="flight">
     <div class="shead reveal">
       <div class="shead__text">
-        <span class="mono">04 — Demo</span>
+        <span class="mono">04 — Simulation</span>
         <h2>Onboard view: no operator, no GPS.</h2>
       </div>
     </div>
@@ -502,9 +503,9 @@
       <p class="xfoot__h">Connect with us</p>
       <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
       <nav aria-label="Footer">
-        <a href="#product">Product</a>
         <a href="#tests">Tests</a>
-        <a href="#flight">Demo</a>
+        <a href="#product">Product</a>
+        <a href="#flight">Simulation</a>
         <a href="#faq">FAQ</a>
       </nav>
     </div>
@@ -515,6 +516,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=23" defer></script>
+<script src="main.js?v=24" defer></script>
 </body>
 </html>
