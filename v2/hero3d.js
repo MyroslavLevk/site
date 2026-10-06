@@ -327,7 +327,7 @@
     renderer.setSize(W, H, false);
     camera.aspect = W / H;
     // keep the whole model in view on narrow screens
-    camera.position.z = W / H < 1.4 ? 3.7 * 1.4 / (W / H) : 3.7;
+    camera.position.z = (W / H < 1.4 ? 3.7 * 1.4 / (W / H) : 3.7) * (W < 520 ? 0.86 : 1); // phones: a bit closer
     camera.updateProjectionMatrix();
   }
   const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2); // ease-in-out, cubic

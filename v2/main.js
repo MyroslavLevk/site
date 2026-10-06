@@ -120,9 +120,11 @@
   const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
 
   /* ---------- hero: x-ray drone, once the page has loaded ---------- */
-  if (document.getElementById('xray')) {
-    const start = () => load(THREE_URL).then(() => load('hero3d.js?v=19')).catch(() => {});
-    if (document.readyState === 'complete') start(); else addEventListener('load', start);
+  // starts right away (three.js is preloaded in the head); the drawn schematic shows only if 3D fails
+  const xr = document.getElementById('xray');
+  if (xr) {
+    const failed = () => { if (!xr.classList.contains('is-on')) xr.classList.add('is-off'); };
+    load(THREE_URL).then(() => load('hero3d.js?v=20')).then(failed, failed);
   }
 
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
@@ -167,7 +169,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=19'))
+        .then(() => load('game3d.js?v=20'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

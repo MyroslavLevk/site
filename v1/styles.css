@@ -1451,3 +1451,44 @@ section[id] { scroll-margin-top: 72px; }
 .tiles--modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .tiles--modes .tile { align-content: start; }
 @media (max-width: 1100px) { .tiles--modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- hero 3D: no drawn box while three.js loads; the schematic only if 3D fails ---------- */
+.xray .xray__fallback { opacity: 0; }
+.xray.is-off .xray__fallback { opacity: 1; }
+.xray:not(.is-on):not(.is-off)::after {
+  content: "Loading 3D";
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font: 400 11px "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted);
+  animation: xrayWait 1.4s ease-in-out infinite alternate;
+}
+@keyframes xrayWait { from { opacity: .25; } to { opacity: .8; } }
+
+/* ---------- platform photos that open the demo ---------- */
+.pcard--demo { cursor: pointer; }
+
+/* ---------- StarNav / SolarNav: numbered reference marks and the sensor they point at ---------- */
+.hcard__media--night img { filter: brightness(.72); }
+.sys__sky--ref .sys__ref circle { fill: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
+.sys__sky--ref .sys__ref path, .sys__sky--ref .sys__ref-box { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.sys__sky--ref .sys__lbl text {
+  font: 500 24px "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: .08em;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, .55);
+  stroke-width: 3px;
+}
+.hcard__media--day .sys__lbl text { fill: #161a12; stroke: rgba(255, 255, 255, .6); }
+.sys__sensor { fill: var(--accent); }
+.hcard__foot { gap: 12px; flex-wrap: wrap; }
+.hcard__note { color: var(--muted); font-size: 11px; letter-spacing: .02em; text-transform: none; }
+@media (max-width: 600px) { .sys__sky--ref .sys__lbl text { font-size: 34px; } }
+/* phones: no faint logo behind the headline (it read as a smudge), tighter hero */
+@media (max-width: 600px) {
+  .hero__brand, [data-theme="light"] .hero__brand { display: none; }
+  .hero .xray { max-height: none; }
+  .hero .xray__nav { margin-top: 0; }
+}
