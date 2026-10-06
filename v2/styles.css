@@ -1513,7 +1513,7 @@ section[id] { scroll-margin-top: 72px; }
 .awards, .awards[class] { max-width: none; }
 .band__foot { justify-items: center; text-align: center; } /* sits under the whole card row, so it centres on it */
 .benefits { justify-self: stretch; width: 100%; }
-.pbtn--center { justify-self: start; }
+.pbtn--center { justify-self: center; } /* under the centred comparison table */
 .faq__grid { max-width: none; margin: 0; }
 #contact.band--cta { justify-items: start; text-align: left; }
 #contact.band--cta .band__title { text-align: left; }
