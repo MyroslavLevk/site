@@ -36,8 +36,15 @@
     const updateHero = () => {
       ticking = false;
       const r = hero.getBoundingClientRect();
-      const travel = r.height - innerHeight; // no pinned scroll (mobile) -> no scroll effect
-      const p = travel > 50 ? clamp(-r.top / travel, 0, 1) : 0;
+      const travel = r.height - innerHeight;
+      let p;
+      if (travel > 50) p = clamp(-r.top / travel, 0, 1);
+      else {
+        // phones: the hero is not pinned; the V takes off over a short scroll once the wordmark is fully in view
+        const w = wordmark.getBoundingClientRect();
+        const start = Math.max(0, w.bottom + scrollY - innerHeight);
+        p = clamp((scrollY - start) / (innerHeight * 0.3), 0, 1);
+      }
       root.style.setProperty('--p', p.toFixed(4));
     };
     addEventListener('scroll', () => {
@@ -124,7 +131,7 @@
   const xr = document.getElementById('xray');
   if (xr) {
     const failed = () => { if (!xr.classList.contains('is-on')) xr.classList.add('is-off'); };
-    load(THREE_URL).then(() => load('hero3d.js?v=21')).then(failed, failed);
+    load(THREE_URL).then(() => load('hero3d.js?v=23')).then(failed, failed);
   }
 
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
@@ -169,7 +176,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=21'))
+        .then(() => load('game3d.js?v=23'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

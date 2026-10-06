@@ -1492,3 +1492,12 @@ section[id] { scroll-margin-top: 72px; }
   .hero .xray { max-height: none; }
   .hero .xray__nav { margin-top: 0; }
 }
+/* phones: "can't find an answer" comes after the questions */
+@media (max-width: 860px) { .faq__ask { order: 0; } }
+/* narrow phones (360 px): the one-page nav has four links, so the logo keeps only its mark */
+.nav__logo .nav__word { display: inline; } /* an older rule hides logo spans below 760 px */
+@media (max-width: 420px) {
+  .nav__logo .nav__word { display: none; }
+  .v5 .nav { gap: 8px; }
+  .v5 .nav__links { gap: 11px; }
+}
