@@ -1593,3 +1593,5 @@ section[id] { scroll-margin-top: 72px; }
 .v5 .band--cta .band__title { font-size: clamp(34px, 4.2vw, 60px); font-weight: 600; line-height: 1; letter-spacing: -.035em; max-width: 20ch; }
 .split__title { font-weight: 600; letter-spacing: -.035em; }
 .phero h1 { letter-spacing: -.04em; }
+/* inner-page heroes start just under the nav, not a screen-third down */
+.phero { padding-top: clamp(104px, 9vw, 132px); }

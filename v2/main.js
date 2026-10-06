@@ -147,7 +147,7 @@
   const xr = document.getElementById('xray');
   if (xr) {
     const failed = () => { if (!xr.classList.contains('is-on')) xr.classList.add('is-off'); };
-    load(THREE_URL).then(() => load('hero3d.js?v=35')).then(failed, failed);
+    load(THREE_URL).then(() => load('hero3d.js?v=36')).then(failed, failed);
   }
 
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
@@ -192,7 +192,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=35'))
+        .then(() => load('game3d.js?v=36'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);
