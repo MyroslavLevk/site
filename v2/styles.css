@@ -1421,7 +1421,7 @@ section[id] { scroll-margin-top: 72px; }
 .awards { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 1240px; }
 .award { height: 100%; }
 .band__foot { display: grid; justify-items: center; gap: 16px; text-align: center; }
-.band__foot p { color: var(--muted); max-width: 46ch; }
+.band__foot p { color: var(--muted); max-width: 62ch; text-wrap: balance; }
 @media (max-width: 1100px) {
   .awards { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 720px; }
 }
@@ -1512,7 +1512,7 @@ section[id] { scroll-margin-top: 72px; }
 .band > .shead { width: 100%; margin-bottom: 0; }
 .shead__text > .mono, .split__text > .mono { font-size: clamp(14px, 1.2vw, 17px); color: color-mix(in srgb, var(--fg) 70%, transparent); }
 .awards, .awards[class] { max-width: none; }
-.band__foot { justify-items: start; text-align: left; }
+.band__foot { justify-items: center; text-align: center; } /* sits under the whole card row, so it centres on it */
 .benefits { justify-self: stretch; width: 100%; }
 .pbtn--center { justify-self: start; }
 .faq__grid { max-width: none; margin: 0; }
