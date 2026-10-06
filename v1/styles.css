@@ -1572,3 +1572,24 @@ section[id] { scroll-margin-top: 72px; }
 .band.band--cta { justify-items: center; text-align: center; }
 .band--cta .band__title { margin-inline: auto; }
 .band--cta .phero__actions { justify-content: center; }
+
+/* ---------- phones: every call-to-action is a full-width, 48 px button with centred text ---------- */
+@media (max-width: 600px) {
+  .hero__actions { flex-direction: column; align-items: stretch; gap: 16px; width: 100%; }
+  .hero__actions .btn { justify-content: center; }
+  .hero__actions .link { align-self: center; }
+  .shead { align-items: stretch; }
+  .shead .pbtn, .pbtn--center, .band__foot .pbtn, .demo__after .pbtn,
+  .phero__actions .pbtn, .phero__actions .btn, .ccard .btn {
+    width: 100%; justify-self: stretch; justify-content: center; height: auto; min-height: 48px;
+  }
+  .band__foot { justify-items: stretch; }
+  .demo__after { flex-direction: column; align-items: stretch; text-align: center; }
+  .phero__actions { flex-direction: column; align-items: stretch; width: 100%; }
+  .ccard { justify-items: stretch; }
+}
+
+/* ---------- one heading style everywhere: Inter Tight 600, tight tracking ---------- */
+.v5 .band--cta .band__title { font-size: clamp(34px, 4.2vw, 60px); font-weight: 600; line-height: 1; letter-spacing: -.035em; max-width: 20ch; }
+.split__title { font-weight: 600; letter-spacing: -.035em; }
+.phero h1 { letter-spacing: -.04em; }
