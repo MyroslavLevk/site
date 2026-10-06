@@ -1442,7 +1442,6 @@ section[id] { scroll-margin-top: 72px; }
 /* phones: one short line above the title, one sentence under it, no caption under the drone */
 @media (max-width: 600px) {
   .sm-hide { display: none; }
-  .hero .brandline .mark--lead { display: none; }
   .hero .brandline { font-size: 11px; }
   .hero .schematic figcaption { display: none; }
   .hero__actions { gap: 20px; }
