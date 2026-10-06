@@ -1,0 +1,5 @@
+sticks.glb  six of the twenty sticks from "Lowpoly sticks free download" (Sketchfab download,
+            lowpoly-sticks-free-download.zip, supplied by the team).
+            Author and licence: to be filled in from the source page before public release.
+            Changes: stick01, 04, 07, 10, 13, 17 only; albedo packed into one 384x256 WebP atlas,
+            normal maps dropped.

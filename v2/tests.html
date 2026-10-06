@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tests &amp; Demos — FNAV Systems</title>
+  <title>Tests & Demos — FNAV Systems</title>
   <meta name="description" content="FNAV has been tested and demonstrated on UAV and USV platforms under real and near-real GPS-denied conditions.">
   <script>
     try {
@@ -11,15 +11,16 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=19">
 </head>
-<body class="v2">
+<body class="v2 v5">
 
 <header class="nav" id="nav">
-  <a class="nav__logo" href="index.html" aria-label="FNAV Systems">FNAV<span>/systems</span></a>
+  <a class="nav__logo" href="index.html" aria-label="FNAV Systems"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
   <nav class="nav__links" aria-label="Main">
     <a href="index.html">Main</a>
     <a href="product.html">Product</a>
@@ -32,52 +33,108 @@
 </header>
 
 <main id="top">
-  <section class="page-hero">
-    <span class="mono reveal">Field record</span>
-    <h1 class="reveal">Tests<br>&amp; Demos</h1>
-    <p class="lead lead--sm reveal">FNAV has been tested and demonstrated on UAV and USV platforms under real and near-real GPS-denied conditions.</p>
-  </section>
-
-  <section class="section">
-    <div class="cards">
-      <article class="card card--test reveal" data-spot>
-        <span class="mono card__tag">Test 01 — UAV</span>
-        <h3>StarNav demo</h3>
-        <p>Demonstrates absolute heading correction using entirely passive technology.</p>
-        <dl class="facts">
-          <div><dt class="mono">Platform</dt><dd>Fixed-wing UAV (simulated)</dd></div>
-          <div><dt class="mono">Technology</dt><dd>StarNav — passive, zero-RF</dd></div>
-          <div><dt class="mono">Conditions</dt><dd>Night, GPS-denied</dd></div>
-        </dl>
-        <a class="link" href="contact.html">Request access <i>→</i></a>
-      </article>
-      <article class="card card--test reveal" data-spot>
-        <span class="mono card__tag">Test 02 — USV</span>
-        <h3>SolarNav demo</h3>
-        <p>Validates absolute heading correction for maritime routes.</p>
-        <dl class="facts">
-          <div><dt class="mono">Platform</dt><dd>USV, vessel data from partners (NDA)</dd></div>
-          <div><dt class="mono">Technology</dt><dd>SolarNav — passive, zero-RF</dd></div>
-          <div><dt class="mono">Conditions</dt><dd>Open ocean, GPS-denied</dd></div>
-        </dl>
-        <a class="link" href="contact.html">Request access <i>→</i></a>
-      </article>
+  <section class="phero phero--solo">
+    <div class="phero__text">
+      <span class="mono reveal brandline"><svg class="mark mark--lead" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg><span>Field record</span></span>
+      <h1 class="reveal">Tests &amp; Demos</h1>
+      <p class="phero__lead reveal">FNAV has been tested and demonstrated on UAV and USV platforms under real and near-real GPS-denied conditions.</p>
     </div>
   </section>
 
-  <section class="section cta">
-    <span class="mono reveal">Access</span>
-    <h2 class="reveal">Full results are shared<br>on request.</h2>
-    <a class="btn reveal" href="contact.html" data-magnet><span>Request access</span><i>→</i></a>
+  <section class="section v5s v5s--first" id="tests">
+    <div class="frame frame--2 reveal">
+      <div class="hl">
+        <article class="hcard">
+          <div class="hcard__media hcard__media--night hcard__media--photo">
+            <img src="img/sky-night.webp" alt="Night sky with the Milky Way" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 1280 457" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M384 178L640 457M924 92L640 457M1188 364L640 457"/>
+              <g class="sys__ref">
+                <circle cx="384" cy="178" r="7"/><circle cx="924" cy="92" r="7"/><circle cx="1188" cy="364" r="7"/>
+                <path d="M364 158h40v40h-40zM904 72h40v40h-40zM1168 344h40v40h-40z"/>
+              </g>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Test 01</li><li class="pill--b">UAV · StarNav</li></ul>
+            <h3>StarNav demo</h3>
+            <p>Demonstrates absolute heading correction using entirely passive technology.</p>
+            <dl class="facts">
+              <div><dt class="mono">Platform</dt><dd>Fixed-wing UAV (simulated)</dd></div>
+              <div><dt class="mono">Technology</dt><dd>StarNav — passive, zero-RF</dd></div>
+              <div><dt class="mono">Conditions</dt><dd>Night, GPS-denied</dd></div>
+            </dl>
+            <a class="hcard__foot mono" href="contact.html"><span>Request access</span><i aria-hidden="true">↗</i></a>
+          </div>
+        </article>
+        <article class="hcard">
+          <div class="hcard__media hcard__media--day hcard__media--photo">
+            <img src="img/sky-day.webp" alt="Sun in a clear sky between rock faces" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 800 286" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M240 168L400 286"/>
+              <circle class="sys__sun-ring" cx="240" cy="168" r="46"/>
+              <path class="sys__ref-box" d="M210 138h60v60h-60z"/>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Test 02</li><li class="pill--b">USV · SolarNav</li></ul>
+            <h3>SolarNav demo</h3>
+            <p>Validates absolute heading correction for maritime routes.</p>
+            <dl class="facts">
+              <div><dt class="mono">Platform</dt><dd>USV, vessel data from partners (NDA)</dd></div>
+              <div><dt class="mono">Technology</dt><dd>SolarNav — passive, zero-RF</dd></div>
+              <div><dt class="mono">Conditions</dt><dd>Open ocean, GPS-denied</dd></div>
+            </dl>
+            <a class="hcard__foot mono" href="contact.html"><span>Request access</span><i aria-hidden="true">↗</i></a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--cta" aria-labelledby="simTitle">
+    <span class="mono reveal">Simulation</span>
+    <h2 class="band__title reveal" id="simTitle">Watch the onboard view: no operator, no GPS.</h2>
+    <p class="band__p reveal">An illustrative 3D simulation of the three environments, not test footage.</p>
+    <a class="pbtn reveal" href="index.html#flight"><span>Open the 3D demo</span><i aria-hidden="true">→</i></a>
+  </section>
+
+  <section class="section v5s">
+    <div class="split split--contact">
+      <div class="split__text reveal">
+        <span class="mono">Access</span>
+        <h2>Full results are shared on request.</h2>
+        <p>Telemetry and reports come under NDA. Tell us about your platform and we will send what applies.</p>
+      </div>
+      <div class="ccard reveal">
+        <div><span class="mono">Email</span><a class="ccard__mail" href="mailto:office@fnav-systems.com">office@fnav-systems.com</a></div>
+        <div><span class="mono">Response</span><p>We respond within 24h</p></div>
+        <a class="btn btn--sm" href="mailto:office@fnav-systems.com?subject=Test%20results%20request"><span>Request access</span><i aria-hidden="true">→</i></a>
+      </div>
+    </div>
   </section>
 </main>
 
-<footer class="footer mono">
-  <span>FNAV — Modular GPS-Denied Navigation. Passive. Unjammable. Zero RF.</span>
-  <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
-  <a href="#top">Back to top ↑</a>
+<!-- FOOTER: big logo left, contacts right, thin bottom row (Figma "Footer") -->
+<footer class="xfoot">
+  <div class="xfoot__top">
+    <a class="xfoot__logo" href="#top" aria-label="FNAV Systems, back to top"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
+    <div class="xfoot__links">
+      <p class="xfoot__h">Connect with us</p>
+      <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+      <nav aria-label="Footer">
+        <a href="product.html">Product</a>
+        <a href="tests.html">Tests</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </div>
+  <div class="xfoot__bottom">
+    <span>FNAV Systems — a Ukrainian defense technology startup</span>
+    <a href="#top">Back to top ↑</a>
+  </div>
 </footer>
 
-<script src="main.js" defer></script>
+<script src="main.js?v=19" defer></script>
 </body>
 </html>

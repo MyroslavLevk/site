@@ -1,0 +1,5 @@
+cards.glb   three grass clumps built from the "realtime-grass" pack (Sketchfab download,
+            realtime-grass.zip, supplied by the team).
+            Author and licence: to be filled in from the source page before public release.
+            Changes: the three grass cards (Plate1-3) crossed into clumps, textures cut to
+            480x188 WebP; the ground plane and its texture are not used.

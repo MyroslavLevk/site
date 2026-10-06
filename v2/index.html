@@ -12,15 +12,16 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=19">
 </head>
-<body class="v2">
+<body class="v2 v5">
 
 <header class="nav" id="nav">
-  <a class="nav__logo" href="index.html" aria-label="FNAV Systems">FNAV<span>/systems</span></a>
+  <a class="nav__logo" href="index.html" aria-label="FNAV Systems"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
   <nav class="nav__links" aria-label="Main">
     <a href="index.html" aria-current="page">Main</a>
     <a href="product.html">Product</a>
@@ -38,20 +39,28 @@
   <section class="hero" id="hero">
     <div class="hero__stage">
       <div class="hero__grid" aria-hidden="true"></div>
+      <!-- the logo, large and faint, behind the first screen -->
+      <svg class="hero__brand" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>
 
       <div class="hero__top">
         <div class="hero__copy">
-          <p class="mono">Passive GPS-denied navigation <i class="dot">●</i> BRAVE1 validated</p>
+          <p class="mono brandline"><svg class="mark mark--lead" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg><span><span class="sm-hide">Passive GPS-denied navigation <i class="dot">●</i> </span>BRAVE1 validated</span></p>
           <h1 class="hero__title">Navigate<br>without GPS.</h1>
-          <p class="hero__text">A 100&nbsp;g plug-in module that reads the stars at night and the sun by day to keep UAV, USV and UGV platforms on course. It emits nothing, so there is nothing to jam or detect.</p>
+          <p class="hero__text">A 100&nbsp;g module that steers UAV, USV and UGV by the stars at night and the sun by day.<span class="sm-hide"> Nothing to jam or detect.</span></p>
           <div class="hero__actions">
             <a class="btn btn--sm" href="contact.html"><span>Discuss integration</span><i>→</i></a>
             <a class="link link--inline" href="tests.html">Test record <i>→</i></a>
           </div>
         </div>
 
+        <!-- x-ray drone (hero3d.js): see-through airframe, the FNAV module solid; the drawn schematic shows until 3D is up -->
         <figure class="schematic">
-          <svg viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
+          <div class="xray" id="xray">
+            <canvas aria-label="FNAV navigation module on a fixed-wing drone: the airframe drawn see-through, the 100 gram module solid on its back, sky sensor on top"></canvas>
+            <svg class="xray__over" aria-hidden="true"><path class="xray__lead"/></svg>
+            <span class="xray__pin xray__pin--sensor" data-pin="sensor" aria-hidden="true"><i class="mono">Sky sensor</i></span>
+            <span class="xray__pin xray__pin--module" data-pin="module" aria-hidden="true"><i class="mono"><b>FNAV module</b>100 g · MAVLink</i></span>
+            <svg class="xray__fallback" viewBox="0 0 440 262" role="img" aria-label="Schematic of the FNAV navigation module: 18 by 13 by 10 centimetres, 100 grams, sky sensor on top, MAVLink output">
             <!-- sky sensor view -->
             <path class="sch__dash" d="M150 96L112 14M196 96l38-82"/>
             <text class="sch__label" x="173" y="12" text-anchor="middle">SKY SENSOR</text>
@@ -75,7 +84,8 @@
             <path class="sch__dim" d="M300 74v100M295 74h10M295 174h10"/>
             <text class="sch__label" x="310" y="128">10 cm</text>
           </svg>
-          <figcaption class="mono">Navigation Module v1 — schematic, appearance illustrative</figcaption>
+          </div>
+          <figcaption class="mono">Navigation Module v1 on a fixed-wing UAV — appearance illustrative</figcaption>
         </figure>
       </div>
 
@@ -85,7 +95,7 @@
           <span class="letter" style="--i:0; --o:100%">F</span>
           <span class="letter" style="--i:1">N</span>
           <span class="letter" style="--i:2; --o:0%">A</span>
-          <span class="letter letter--drone">
+          <span class="letter letter--drone" style="--i:3">
             <svg class="glyph" viewBox="0 0 100 100" preserveAspectRatio="none">
               <defs>
                 <!-- light from the left: highlight on one wing, shade on the other -->
@@ -137,99 +147,140 @@
     </div>
   </section>
 
-  <!-- PROOF: validation first, straight after the hero -->
-  <section class="proof">
-    <div class="proof__item reveal">
-      <span class="mono">Validation</span>
-      <p><b>BRAVE1 validated.</b> Working with defense units and allied partners.</p>
+  <!-- KEY FIGURES: four stats, each with a rule on its left (Figma "Frame 1000001555") -->
+  <section class="figs" aria-label="Key figures">
+    <div class="fig reveal">
+      <b>100<small>g</small></b>
+      <svg class="fig__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M17 16a7 7 0 1 1 14 0M12 18h24l5 22H7z"/></svg>
+      <span class="mono">Module weight</span>
     </div>
-    <div class="proof__item reveal">
-      <span class="mono">UAV · StarNav</span>
-      <p>Fixed-wing UAV (simulated), night, GPS-denied. Absolute heading correction, fully passive.</p>
+    <div class="fig reveal">
+      <b>0</b>
+      <svg class="fig__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 30v10M14 24a14 14 0 0 1 20 0M8 18a22 22 0 0 1 32 0M8 8l32 32"/></svg>
+      <span class="mono">RF emissions</span>
     </div>
-    <div class="proof__item reveal">
-      <span class="mono">USV · SolarNav</span>
-      <p>Open ocean, GPS-denied. Validated on real vessel telemetry from two companies (NDA).</p>
+    <div class="fig reveal">
+      <b>3</b>
+      <svg class="fig__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 30l10-12 8 8 6-6 12 10M6 36c6-3 12 3 18 0s12-3 18 0M6 42h36"/></svg>
+      <span class="mono">Environments</span>
     </div>
-    <a class="proof__link reveal" href="tests.html"><span>Tests &amp; demos</span><i>→</i></a>
+    <div class="fig reveal">
+      <b>2</b>
+      <svg class="fig__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M30 10a12 12 0 1 0 8 20 14 14 0 0 1-8-20zM12 34v6M9 37h6M38 8v4M36 10h4"/></svg>
+      <span class="mono">Sky modes</span>
+    </div>
   </section>
 
-  <!-- SYSTEM: StarNav and SolarNav as one system with two modes -->
-  <section class="section" id="product">
-    <header class="section__head reveal">
-      <span class="mono">01 — The system</span>
-      <h2>One module.<br>Two skies.</h2>
-    </header>
-
-    <div class="sys reveal">
-      <div class="sys__half sys__half--night">
-        <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMaxYMax slice" aria-hidden="true">
-          <g class="sys__stars">
-            <circle cx="40" cy="30" r="1.2"/><circle cx="92" cy="74" r="1"/><circle cx="150" cy="22" r="1.4"/>
-            <circle cx="210" cy="96" r="1"/><circle cx="262" cy="40" r="1.2"/><circle cx="330" cy="70" r="1"/>
-            <circle cx="60" cy="128" r="1"/><circle cx="300" cy="150" r="1.2"/><circle cx="180" cy="150" r="1"/>
-            <circle cx="360" cy="24" r="1.3"/><circle cx="24" cy="190" r="1"/><circle cx="120" cy="200" r="1.1"/>
-          </g>
-          <path class="sys__ray" d="M120 60L400 260M236 34L400 260M340 110L400 260"/>
-          <g class="sys__ref">
-            <circle cx="120" cy="60" r="3"/><circle cx="236" cy="34" r="3"/><circle cx="340" cy="110" r="3"/>
-            <path d="M112 52h16v16h-16zM228 26h16v16h-16zM332 102h16v16h-16z"/>
-          </g>
-        </svg>
-        <div class="sys__text">
-          <span class="mono">Night</span>
-          <h3>StarNav</h3>
-          <p>Uses the night sky to compute absolute heading. No error accumulation.</p>
-        </div>
-      </div>
-
-      <div class="sys__half sys__half--day">
-        <svg class="sys__sky" viewBox="0 0 400 260" preserveAspectRatio="xMinYMax slice" aria-hidden="true">
-          <path class="sys__track" d="M-20 200C80 20 300 20 420 200"/>
-          <path class="sys__ray" d="M250 62L0 260"/>
-          <circle class="sys__sun-ring" cx="250" cy="62" r="34"/>
-          <circle class="sys__sun" cx="250" cy="62" r="18"/>
-        </svg>
-        <div class="sys__text">
-          <span class="mono">Day</span>
-          <h3>SolarNav</h3>
-          <p>Uses the sun to compute absolute heading, with continuous correction through daylight hours.</p>
-        </div>
-      </div>
-
-      <div class="sys__module mono" aria-hidden="true"><i></i>FNAV module</div>
+  <!-- VALIDATION: a full-width band with a centred title and a row of cards (Figma "Awards") -->
+  <section class="band" id="validation" aria-labelledby="valTitle">
+    <h2 class="band__title reveal" id="valTitle">Validation</h2>
+    <div class="awards" tabindex="0" aria-label="Validation and partners">
+      <article class="award bcard reveal">
+        <svg class="award__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4l16 6v12c0 10-7 18-16 22C15 40 8 32 8 22V10z"/><path d="M16 24l6 6 10-12"/></svg>
+        <h3>BRAVE1</h3>
+        <p class="award__sub">Validated</p>
+        <p class="award__note">Working with defense units and allied partners</p>
+      </article>
+      <article class="award bcard reveal">
+        <svg class="award__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l3 9h9l-7 6 3 9-8-6-8 6 3-9-7-6h9z"/><path d="M8 42h32"/></svg>
+        <h3>UAV · StarNav</h3>
+        <p class="award__sub">Night, GPS-denied</p>
+        <p class="award__note">Fixed-wing UAV (simulated), absolute heading correction</p>
+      </article>
+      <article class="award bcard reveal">
+        <svg class="award__icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="14" r="6"/><path d="M24 2v4M36 14h4M8 14h4M6 32c6-4 12 4 18 0s12-4 18 0M6 40c6-4 12 4 18 0s12-4 18 0"/></svg>
+        <h3>USV · SolarNav</h3>
+        <p class="award__sub">Open ocean</p>
+        <p class="award__note">Validated on real vessel telemetry</p>
+      </article>
+      <article class="award bcard reveal">
+        <svg class="award__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M4 24l8-8 8 4 8-6 8 4 8 6M12 16l-4 14 8 8 8-6M36 20l4 12-8 8-6-4"/></svg>
+        <h3>Partners</h3>
+        <p class="award__sub">Two companies</p>
+        <p class="award__note">Telemetry shared under NDA</p>
+      </article>
     </div>
-
-    <p class="sys__note reveal">When the sky is temporarily unavailable, VIO and map-matching run alongside as a fallback for precise short-term positioning.</p>
-
-    <dl class="strip reveal">
-      <div><dt class="mono">Weight</dt><dd>100 g</dd></div>
-      <div><dt class="mono">Size</dt><dd>18 × 13 × 10 cm</dd></div>
-      <div><dt class="mono">RF emissions</dt><dd>Zero</dd></div>
-      <div><dt class="mono">Accuracy</dt><dd>On request</dd></div>
-      <div><dt class="mono">Output</dt><dd>MAVLink · ArduPilot · PX4</dd></div>
-    </dl>
-    <a class="link reveal" href="product.html">Full specification <i>→</i></a>
+    <div class="band__foot reveal">
+      <a class="pbtn" href="tests.html"><span>Test record</span><i aria-hidden="true">→</i></a>
+    </div>
   </section>
 
-  <!-- ENVIRONMENTS: three glass panels over one continuous panorama (sky -> ridge -> water -> terrain) -->
-  <section class="section" id="platforms">
-    <header class="section__head reveal">
-      <span class="mono">02 — Where it works</span>
-      <h2>One system.<br>Three environments.</h2>
-    </header>
+  <!-- 01 SYSTEM: two highlight cards in a bracket frame (Figma "Current Projects"),
+       then text left + 2x2 tiles right (Figma "Our mission") -->
+  <section class="section v5s" id="product">
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">01 — The system</span>
+        <h2>One module. Two skies.</h2>
+        <p class="shead__p">StarNav and SolarNav are two modes of the same module: the night sky and the sun give an absolute heading that does not drift.</p>
+      </div>
+      <a class="pbtn" href="product.html"><span>Full specification</span><i aria-hidden="true">→</i></a>
+    </div>
 
-    <div class="env reveal">
-      <!-- AIR -->
-      <article class="env__panel" tabindex="0" role="button" data-env="air" aria-label="Open the air 3D demo">
-        <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
+    <div class="frame frame--2 reveal">
+      <div class="hl">
+        <article class="hcard">
+          <div class="hcard__media hcard__media--night hcard__media--photo">
+            <img src="img/sky-night.webp" alt="Night sky with the Milky Way" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 1280 457" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M384 178L640 457M924 92L640 457M1188 364L640 457"/>
+              <g class="sys__ref">
+                <circle cx="384" cy="178" r="7"/><circle cx="924" cy="92" r="7"/><circle cx="1188" cy="364" r="7"/>
+                <path d="M364 158h40v40h-40zM904 72h40v40h-40zM1168 344h40v40h-40z"/>
+              </g>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Night</li><li class="pill--b">StarNav</li></ul>
+            <h3>StarNav</h3>
+            <p>Uses the night sky to compute absolute heading. No error accumulation.</p>
+            <div class="hcard__foot mono"><span>Absolute heading · night</span></div>
+          </div>
+        </article>
+        <article class="hcard">
+          <div class="hcard__media hcard__media--day hcard__media--photo">
+            <img src="img/sky-day.webp" alt="Sun in a clear sky between rock faces" loading="lazy">
+            <svg class="sys__sky" viewBox="0 0 800 286" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path class="sys__ray" d="M240 168L400 286"/>
+              <circle class="sys__sun-ring" cx="240" cy="168" r="46"/>
+              <path class="sys__ref-box" d="M210 138h60v60h-60z"/>
+            </svg>
+          </div>
+          <div class="hcard__body">
+            <ul class="pills"><li>Day</li><li class="pill--b">SolarNav</li></ul>
+            <h3>SolarNav</h3>
+            <p>Uses the sun to compute absolute heading, with continuous correction through daylight hours.</p>
+            <div class="hcard__foot mono"><span>Absolute heading · day</span></div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- 02 ENVIRONMENTS: three cards, scene on top, solid panel below with a round arrow (Figma "Card") -->
+  <section class="section v5s" id="platforms">
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">02 — Where it works</span>
+        <h2>One system. Three environments.</h2>
+        <p class="shead__p">Open any card to drive the 3D demo below in that environment.</p>
+      </div>
+      <a class="pbtn" href="#flight"><span>Open 3D demo</span><i aria-hidden="true">→</i></a>
+    </div>
+
+    <div class="frame frame--3 reveal">
+      <div class="cards3">
+        <article class="pcard" tabindex="0" role="button" data-env="air" aria-label="Open the air 3D demo">
+          <div class="pcard__media">
+            <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="skyA" x1="0" y1="0" x2="0" y2="1"><stop class="env__s1" offset="0"/><stop class="env__s2" offset="1"/></linearGradient></defs>
           <rect width="400" height="520" fill="url(#skyA)"/>
           <g class="env__star"><circle cx="50" cy="60" r="1.2"/><circle cx="140" cy="34" r="1"/><circle cx="250" cy="80" r="1.3"/><circle cx="340" cy="44" r="1"/><circle cx="96" cy="130" r="1"/><circle cx="310" cy="150" r="1.1"/></g>
           <path class="env__far" d="M0 372l50-46 44 30 62-70 54 58 46-34 60 50 84 12v148H0z"/>
           <path class="env__land" d="M0 420l70-34 60 22 80-52 70 44 60-22 60 12v130H0z"/>
         </svg>
-        <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
+            <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
           <path class="env__drop" d="M200 216v150"/>
           <path class="env__route" d="M-260 336Q-80 328 40 284T200 204T380 152T660 108"/>
           <g class="env__pt"><circle cx="40" cy="284" r="4"/><circle cx="380" cy="152" r="4"/></g>
@@ -242,18 +293,18 @@
             <path d="M259 194v20" class="env__thin"/>
           </g>
         </svg>
-        <div class="env__glass">
-          <span class="mono">Air / UAV</span>
-          <h3>Fixed-wing, multi-rotor, loitering munitions</h3>
-          <p>StarNav + SolarNav output via MAVLink, straight into the autopilot.</p>
-          <ul class="env__more mono"><li>MAVLink</li><li>ArduPilot</li><li>PX4</li></ul>
-          <span class="env__cta mono">Open 3D demo <i>→</i></span>
-        </div>
-      </article>
-
-      <!-- SEA -->
-      <article class="env__panel" tabindex="0" role="button" data-env="sea" aria-label="Open the sea 3D demo">
-        <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
+          </div>
+          <span class="pcard__go" aria-hidden="true">↗</span>
+          <div class="pcard__body">
+            <ul class="pills"><li>Air / UAV</li><li class="pill--b">StarNav + SolarNav</li></ul>
+            <h3>Fixed-wing, multi-rotor, loitering munitions</h3>
+            <p>StarNav + SolarNav output via MAVLink, straight into the autopilot.</p>
+            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+          </div>
+        </article>
+        <article class="pcard" tabindex="0" role="button" data-env="sea" aria-label="Open the sea 3D demo">
+          <div class="pcard__media">
+            <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="skyB" x1="0" y1="0" x2="0" y2="1"><stop class="env__s1" offset="0"/><stop class="env__s2" offset="1"/></linearGradient></defs>
           <rect width="400" height="520" fill="url(#skyB)"/>
           <g class="env__star"><circle cx="70" cy="48" r="1"/><circle cx="180" cy="90" r="1.3"/><circle cx="290" cy="40" r="1.1"/><circle cx="360" cy="120" r="1"/><circle cx="120" cy="170" r="1"/></g>
@@ -261,7 +312,7 @@
           <rect class="env__water" y="390" width="400" height="130"/>
           <path class="env__wave" d="M20 412h60M130 418h90M270 410h70M60 440h110M230 446h120M10 474h90M150 480h140M320 470h70M40 504h160M250 506h110"/>
         </svg>
-        <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
+            <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
           <path class="env__route" d="M-260 486Q-80 480 40 448T122 398"/>
           <path class="env__route" d="M276 392Q340 388 420 404T660 396"/>
           <g class="env__pt"><circle cx="40" cy="448" r="4"/><circle cx="420" cy="404" r="4"/></g>
@@ -273,18 +324,18 @@
             <path d="M180 366v-26M171 348h18" class="env__thin"/>
           </g>
         </svg>
-        <div class="env__glass">
-          <span class="mono">Sea / USV</span>
-          <h3>Open-ocean vessels</h3>
-          <p>Navigation over open water, where map-matching fails entirely.</p>
-          <ul class="env__more mono"><li>Validated on real vessel telemetry</li><li>Two companies, NDA</li></ul>
-          <span class="env__cta mono">Open 3D demo <i>→</i></span>
-        </div>
-      </article>
-
-      <!-- GROUND -->
-      <article class="env__panel" tabindex="0" role="button" data-env="ground" aria-label="Open the ground 3D demo">
-        <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
+          </div>
+          <span class="pcard__go" aria-hidden="true">↗</span>
+          <div class="pcard__body">
+            <ul class="pills"><li>Sea / USV</li><li class="pill--b">Validated</li></ul>
+            <h3>Open-ocean vessels</h3>
+            <p>Navigation over open water, where map-matching fails entirely.</p>
+            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+          </div>
+        </article>
+        <article class="pcard" tabindex="0" role="button" data-env="ground" aria-label="Open the ground 3D demo">
+          <div class="pcard__media">
+            <svg class="env__bg" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="skyC" x1="0" y1="0" x2="0" y2="1"><stop class="env__s1" offset="0"/><stop class="env__s2" offset="1"/></linearGradient></defs>
           <rect width="400" height="520" fill="url(#skyC)"/>
           <g class="env__star"><circle cx="40" cy="90" r="1"/><circle cx="150" cy="50" r="1.2"/><circle cx="240" cy="130" r="1"/><circle cx="330" cy="70" r="1.3"/></g>
@@ -294,7 +345,7 @@
           <path class="env__wave" d="M0 414c60-10 110 8 170 0s120-14 230-2M0 440c80-14 130 12 200 2s120-10 200 4M0 468c70-8 150 14 220 4s110-12 180 0M0 498c90-10 160 10 240 2s100-6 160 2"/>
           <path class="env__grid" d="M80 390L40 520M160 390l-16 130M240 390l16 130M320 390l40 130"/>
         </svg>
-        <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
+            <svg class="env__fg" viewBox="0 0 400 520" aria-hidden="true">
           <path class="env__route" d="M-260 456Q-80 452 30 428T136 404"/>
           <path class="env__route" d="M260 404Q320 410 380 436T660 448"/>
           <g class="env__pt"><circle cx="30" cy="428" r="4"/><circle cx="380" cy="436" r="4"/></g>
@@ -307,22 +358,42 @@
           </g>
           <g class="env__hub"><circle cx="160" cy="404" r="4"/><circle cx="198" cy="404" r="4"/><circle cx="236" cy="404" r="4"/></g>
         </svg>
-        <div class="env__glass">
-          <span class="mono">Ground / UGV</span>
-          <h3>Ground vehicles and autonomous rovers</h3>
-          <p>Holds position in GPS-jammed environments.</p>
-          <ul class="env__more mono"><li>Urban terrain</li><li>Open field</li></ul>
-          <span class="env__cta mono">Open 3D demo <i>→</i></span>
-        </div>
-      </article>
+          </div>
+          <span class="pcard__go" aria-hidden="true">↗</span>
+          <div class="pcard__body">
+            <ul class="pills"><li>Ground / UGV</li><li class="pill--b">GPS-jammed</li></ul>
+            <h3>Ground vehicles and autonomous rovers</h3>
+            <p>Holds position in GPS-jammed environments.</p>
+            <span class="pcard__cta mono">Open 3D demo <i>→</i></span>
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section class="section section--tight" id="how">
-    <header class="section__head reveal">
+  <!-- 03 WHY IT HOLDS: bracketed title over a row of benefit cards (Figma "Partners Benefits"), then the table -->
+  <section class="band band--plain" id="how" aria-labelledby="howTitle">
+    <div class="btitle reveal">
       <span class="mono">03 — Why it holds</span>
-      <h2 class="h2--sm">Three ways to know where you are. One survives jamming without drifting.</h2>
-    </header>
+      <h2 id="howTitle">Survives jamming. Does not drift.</h2>
+    </div>
+    <div class="benefits reveal">
+      <article class="benefit">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 8v8M24 32v8M8 24h8M32 24h8"/><circle cx="24" cy="24" r="8"/><path d="M8 8l32 32"/></svg>
+        <h3>Can't be jammed</h3>
+        <p>It depends on no external signal, so there is nothing to block or spoof.</p>
+      </article>
+      <article class="benefit">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 34h36M6 24h36" /><path d="M10 34l8-10 8 10 8-10 8 10"/></svg>
+        <h3>No error accumulation</h3>
+        <p>Every fix is absolute, so the error does not grow with time like inertial drift.</p>
+      </article>
+      <article class="benefit">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M4 24s8-12 20-12 20 12 20 12-8 12-20 12S4 24 4 24z"/><circle cx="24" cy="24" r="5"/><path d="M8 40L40 8"/></svg>
+        <h3>Nothing to detect</h3>
+        <p>Zero RF emissions: the module only receives light from the sky.</p>
+      </article>
+    </div>
     <div class="compare reveal" role="table" aria-label="Navigation methods compared">
       <div class="compare__row compare__row--head mono" role="row">
         <span role="columnheader"></span><span role="columnheader">GNSS</span><span role="columnheader">Inertial</span><span role="columnheader">FNAV</span>
@@ -337,121 +408,126 @@
         <span role="rowheader">Error grows over time</span><span role="cell" data-label="GNSS">No</span><span role="cell" data-label="Inertial">Yes</span><span role="cell" data-label="FNAV" class="win">No</span>
       </div>
     </div>
+    <a class="pbtn pbtn--center reveal" href="product.html#compat"><span>Fallback &amp; compatibility</span><i aria-hidden="true">→</i></a>
   </section>
 
-  <!-- DEMO: a separate, clearly labelled simulation with its own controls -->
-  <section class="section section--tight" id="flight">
-    <header class="section__head reveal">
-      <span class="mono">04 — Demo</span>
-      <h2 class="h2--sm">Onboard view: no operator, no GPS.</h2>
-    </header>
-    <div class="demo reveal">
+  <!-- 04 DEMO: unchanged scene and controls, framed by corner brackets -->
+  <section class="section v5s" id="flight">
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">04 — Demo</span>
+        <h2>Onboard view: no operator, no GPS.</h2>
+      </div>
+    </div>
+    <div class="frame frame--demo reveal">
+      <div class="demo">
       <div class="demo__bar">
         <div class="seg" role="group" aria-label="Environment">
-          <button class="tbtn is-active" type="button" data-env="air">Air</button>
-          <button class="tbtn" type="button" data-env="sea">Sea</button>
-          <button class="tbtn" type="button" data-env="ground">Ground</button>
+          <button class="tbtn is-active" type="button" data-env="air" aria-pressed="true">Air</button>
+          <button class="tbtn" type="button" data-env="sea" aria-pressed="false">Sea</button>
+          <button class="tbtn" type="button" data-env="ground" aria-pressed="false">Ground</button>
         </div>
         <div class="seg" id="simLoc" role="group" aria-label="Location" hidden>
-          <button class="tbtn is-active" type="button" data-loc="open">Open sea</button>
-          <button class="tbtn" type="button" data-loc="port">Port approach</button>
+          <button class="tbtn is-active" type="button" data-loc="open" aria-pressed="true">Open sea</button>
+          <button class="tbtn" type="button" data-loc="port" aria-pressed="false">Port approach</button>
         </div>
         <span class="mono demo__note">Simulation · illustrative, not test footage</span>
         <div class="demo__ctl">
+          <button class="tbtn" id="simMode" type="button">Night · StarNav</button>
           <button class="tbtn tbtn--main" id="simPlay" type="button">Pause</button>
         </div>
       </div>
-      <div class="demo__body">
-        <!-- left: what the platform knows -->
-        <aside class="dside" aria-label="Mission data">
-          <div class="dcard dcard--map">
-            <div class="dcard__head mono"><span>Route plan · top view</span><i class="dlive">live</i></div>
-            <canvas id="miniMap" aria-label="Top view of the planned route and the obstacles ahead"></canvas>
-            <ul class="dkey mono" aria-hidden="true"><li><b class="dk dk--route"></b>Route</li><li><b class="dk dk--obj"></b>Object</li><li><b class="dk dk--threat"></b>Avoid</li></ul>
-          </div>
-          <dl class="dstats">
-            <div><dt class="mono">Speed</dt><dd><b id="spd">0</b><small>km/h</small></dd></div>
-            <div id="altBox"><dt class="mono" id="altLbl">Altitude</dt><dd><b id="alt">0</b><small id="altUnit">m</small></dd></div>
-            <div><dt class="mono">Tracked</dt><dd><b id="obj">0</b><small>obj</small></dd></div>
-            <div><dt class="mono">Distance</dt><dd><b id="dist">0</b><small>m</small></dd></div>
-          </dl>
-        </aside>
-
-        <div class="game" id="game">
-          <canvas id="gameCanvas" aria-label="Simulation: onboard camera of an autonomous drone that detects obstacles and flies around them"></canvas>
-          <canvas id="hudCanvas" aria-hidden="true"></canvas>
-          <div class="game__hud mono">
-            <span>GPS <b class="bad">NO SIGNAL</b></span>
-            <span>NAV <b id="navMode">STARNAV</b></span>
-          </div>
-          <p class="game__hint mono" id="hint"></p>
+      <div class="game" id="game">
+        <canvas id="gameCanvas" aria-label="Simulation: onboard camera of an autonomous drone that detects obstacles and flies around them"></canvas>
+        <canvas id="hudCanvas" aria-hidden="true"></canvas>
+        <div class="game__hud mono">
+          <span>GPS <b class="bad">NO SIGNAL</b></span>
+          <span>NAV <b id="navMode">STARNAV</b></span>
+          <span>MODE <b>AUTONOMOUS</b></span>
         </div>
-
-        <!-- right: what the visitor controls -->
-        <aside class="dside" aria-label="Simulation controls">
-          <div class="dcard">
-            <div class="dcard__head mono"><span>Navigation source</span></div>
-            <div class="dnav" role="group" aria-label="Time of day">
-              <button class="dnav__opt" type="button" data-sky="night" aria-pressed="true">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.6 5.1L19 9.6l-4.4 3.2 1.7 5.2L12 14.8 7.7 18l1.7-5.2L5 9.6l5.4-1.5z"/></svg>
-                <span><b>StarNav</b><small class="mono">Night · stars</small></span>
-              </button>
-              <button class="dnav__opt" type="button" data-sky="day" aria-pressed="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
-                <span><b>SolarNav</b><small class="mono">Day · sun</small></span>
-              </button>
-            </div>
-            <p class="dnote mono" id="refNote">3 star references locked</p>
-          </div>
-          <div class="dcard">
-            <div class="dcard__head mono"><span>Onboard overlay</span></div>
-            <div class="dsw">
-              <label><input type="checkbox" data-layer="boxes" checked><i></i><span>Detections</span></label>
-              <label><input type="checkbox" data-layer="route" checked><i></i><span>Planned route</span></label>
-              <label><input type="checkbox" data-layer="refs" checked><i></i><span>Sky references</span></label>
-            </div>
-          </div>
-          <div class="dcard">
-            <div class="dcard__head mono"><span>Decision log</span></div>
-            <ol class="dlog mono" id="simLog" aria-live="off"><li class="dlog__empty">Waiting for the first obstacle…</li></ol>
-          </div>
-          <div class="dcard dcard--row">
-            <div>
-              <div class="dcard__head mono"><span>Sim speed</span></div>
-              <div class="dseg" role="group" aria-label="Simulation speed">
-                <button type="button" data-rate="0.5" aria-pressed="false">½×</button>
-                <button type="button" data-rate="1" aria-pressed="true">1×</button>
-                <button type="button" data-rate="2" aria-pressed="false">2×</button>
-              </div>
-            </div>
-            <div>
-              <div class="dcard__head mono"><span>Render</span><i class="dfps" id="simFps">— fps</i></div>
-              <div class="dseg" role="group" aria-label="Render quality">
-                <button type="button" data-q="0" aria-pressed="false" title="30 fps, no shadows">Eco</button>
-                <button type="button" data-q="1" aria-pressed="true" title="30 fps, soft shadows">Std</button>
-                <button type="button" data-q="2" aria-pressed="false" title="60 fps, full detail">Max</button>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <div class="game__hud game__hud--r mono">
+          <span>SPD <b id="spd">0</b> km/h</span>
+          <span id="altBox">ALT <b id="alt">0</b> m</span>
+          <span>OBJ <b id="obj">0</b></span>
+          <span>DIST <b id="dist">0</b> m</span>
+        </div>
+        <p class="game__hint mono" id="hint"></p>
       </div>
+    </div>
+    </div>
+    <div class="demo__after reveal">
+      <p>Want it on your platform?</p>
+      <a class="pbtn" href="contact.html"><span>Discuss integration</span><i aria-hidden="true">→</i></a>
     </div>
   </section>
 
-  <section class="section cta" id="contact">
+  <!-- FAQ: accordion left, "can't find an answer" right (Figma "FAQs") -->
+  <section class="section v5s faq" id="faq" aria-labelledby="faqTitle">
+    <h2 class="faq__title reveal" id="faqTitle">Frequently asked questions</h2>
+    <div class="faq__grid">
+      <div class="faq__list reveal">
+        <details class="qa">
+          <summary>Which autopilots are supported?</summary>
+          <p>[Answer — to be added]</p>
+        </details>
+        <details class="qa">
+          <summary>What happens under cloud cover?</summary>
+          <p>[Answer — to be added]</p>
+        </details>
+        <details class="qa">
+          <summary>Power and mounting?</summary>
+          <p>[Answer — to be added]</p>
+        </details>
+        <details class="qa">
+          <summary>Accuracy figures?</summary>
+          <p>[Answer — to be added]</p>
+        </details>
+        <details class="qa">
+          <summary>Lead time and pricing?</summary>
+          <p>[Answer — to be added]</p>
+        </details>
+      </div>
+      <aside class="faq__ask reveal">
+        <span class="faq__q" aria-hidden="true">?</span>
+        <p class="faq__lead">Can't find an answer to your question?</p>
+        <p class="mono">Reach out to us</p>
+        <a class="faq__mail" href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 05 CONTACT: a closing call to action; details and the form are on contact.html -->
+  <section class="band band--cta" id="contact" aria-labelledby="ctaTitle">
     <span class="mono reveal">05 — Contact</span>
-    <h2 class="reveal">Discuss<br>integration.</h2>
-    <p class="lead lead--sm reveal">Collaboration, testing or deployment. Accuracy figures and pricing on request — we respond fast.</p>
-    <a class="btn reveal" href="contact.html" data-magnet><span>Get in touch</span><i>→</i></a>
+    <h2 class="band__title reveal" id="ctaTitle">Discuss integration.</h2>
+    <p class="band__p reveal">Collaboration, testing or deployment. Accuracy figures and pricing on request. We respond within 24h.</p>
+    <div class="phero__actions reveal">
+      <a class="btn btn--sm" href="contact.html"><span>Get in touch</span><i aria-hidden="true">→</i></a>
+      <a class="pbtn" href="mailto:office@fnav-systems.com"><span>office@fnav-systems.com</span></a>
+    </div>
   </section>
 </main>
 
-<footer class="footer mono">
-  <span>FNAV Systems — a Ukrainian defense technology startup</span>
-  <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
-  <a href="#top">Back to top ↑</a>
+<!-- FOOTER: big logo left, contacts right, thin bottom row (Figma "Footer") -->
+<footer class="xfoot">
+  <div class="xfoot__top">
+    <a class="xfoot__logo" href="#top" aria-label="FNAV Systems, back to top"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
+    <div class="xfoot__links">
+      <p class="xfoot__h">Connect with us</p>
+      <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+      <nav aria-label="Footer">
+        <a href="product.html">Product</a>
+        <a href="tests.html">Tests</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </div>
+  <div class="xfoot__bottom">
+    <span>FNAV Systems — a Ukrainian defense technology startup</span>
+    <a href="#top">Back to top ↑</a>
+  </div>
 </footer>
 
-<script src="main.js?v=2" defer></script>
+<script src="main.js?v=19" defer></script>
 </body>
 </html>

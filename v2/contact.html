@@ -4,22 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Contact — FNAV Systems</title>
-  <meta name="description" content="Interested in collaboration, testing, or deployment? We respond fast.">
+  <meta name="description" content="Collaboration, testing or deployment of FNAV passive GPS-denied navigation. We respond within 24h.">
   <script>
     try {
       var t = localStorage.getItem('fnav-theme');
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=19">
 </head>
-<body class="v2">
+<body class="v2 v5">
 
 <header class="nav" id="nav">
-  <a class="nav__logo" href="index.html" aria-label="FNAV Systems">FNAV<span>/systems</span></a>
+  <a class="nav__logo" href="index.html" aria-label="FNAV Systems"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
   <nav class="nav__links" aria-label="Main">
     <a href="index.html">Main</a>
     <a href="product.html">Product</a>
@@ -32,36 +33,65 @@
 </header>
 
 <main id="top">
-  <section class="page-hero">
-    <span class="mono reveal">Collaboration <i>●</i> Testing <i>●</i> Deployment</span>
-    <h1 class="reveal">Let's talk</h1>
-    <p class="lead lead--sm reveal">Interested in collaboration, testing, or deployment? We respond fast.</p>
+  <section class="phero phero--solo">
+    <div class="phero__text">
+      <span class="mono reveal brandline"><svg class="mark mark--lead" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg><span>Collaboration <i class="dot">●</i> Testing <i class="dot">●</i> Deployment</span></span>
+      <h1 class="reveal">Let's talk</h1>
+      <p class="phero__lead reveal">Interested in collaboration, testing or deployment? Accuracy figures and pricing on request.</p>
+    </div>
   </section>
 
-  <section class="section contact">
-    <div class="contact__info reveal">
-      <div><span class="mono">Email</span><a class="link" href="mailto:office@fnav-systems.com">office@fnav-systems.com <i>→</i></a></div>
-      <div><span class="mono">Signal</span><p>Available on request</p></div>
+  <section class="section v5s v5s--first">
+    <div class="split split--contact">
+      <div class="split__text reveal">
+        <span class="mono">What to send</span>
+        <h3 class="split__title">Tell us about your platform</h3>
+        <ul class="asks mono">
+          <li>Platform: UAV, USV or UGV</li>
+          <li>Autopilot and interface</li>
+          <li>Where it has to operate</li>
+          <li>What you need: testing, integration or deployment</li>
+        </ul>
+        <dl class="cfacts">
+          <div><dt class="mono">Email</dt><dd><a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a></dd></div>
+          <div><dt class="mono">Signal</dt><dd>Available on request</dd></div>
+          <div><dt class="mono">Response</dt><dd>We respond within 24h</dd></div>
+        </dl>
+        <a class="pbtn" href="index.html#faq"><span>Read the FAQ</span><i aria-hidden="true">→</i></a>
+      </div>
+      <!-- no backend yet: main.js turns the form into a pre-filled email -->
+      <form class="cform reveal" id="contactForm">
+        <label><span class="mono">Name</span><input name="name" autocomplete="name" required></label>
+        <label><span class="mono">Organisation</span><input name="org" autocomplete="organization"></label>
+        <label><span class="mono">Email</span><input name="email" type="email" autocomplete="email" required></label>
+        <label><span class="mono">Subject</span><input name="subject" required></label>
+        <label class="cform__wide"><span class="mono">Message</span><textarea name="message" rows="5" required></textarea></label>
+        <button class="btn btn--sm" type="submit"><span>Send message</span><i aria-hidden="true">→</i></button>
+      </form>
     </div>
-
-    <!-- no backend yet: main.js turns the form into a pre-filled email -->
-    <form class="form reveal" id="contactForm">
-      <label><span class="mono">Name</span><input name="name" autocomplete="name" required></label>
-      <label><span class="mono">Organisation</span><input name="org" autocomplete="organization"></label>
-      <label><span class="mono">Email</span><input name="email" type="email" autocomplete="email" required></label>
-      <label><span class="mono">Subject</span><input name="subject" required></label>
-      <label class="form__wide"><span class="mono">Message</span><textarea name="message" rows="5" required></textarea></label>
-      <button class="btn" type="submit" data-magnet><span>Send message</span><i>→</i></button>
-    </form>
   </section>
 </main>
 
-<footer class="footer mono">
-  <span>FNAV — Modular GPS-Denied Navigation. Passive. Unjammable. Zero RF.</span>
-  <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
-  <a href="#top">Back to top ↑</a>
+<!-- FOOTER: big logo left, contacts right, thin bottom row (Figma "Footer") -->
+<footer class="xfoot">
+  <div class="xfoot__top">
+    <a class="xfoot__logo" href="#top" aria-label="FNAV Systems, back to top"><svg class="mark" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg>FNAV</a>
+    <div class="xfoot__links">
+      <p class="xfoot__h">Connect with us</p>
+      <a href="mailto:office@fnav-systems.com">office@fnav-systems.com</a>
+      <nav aria-label="Footer">
+        <a href="product.html">Product</a>
+        <a href="tests.html">Tests</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </div>
+  <div class="xfoot__bottom">
+    <span>FNAV Systems — a Ukrainian defense technology startup</span>
+    <a href="#top">Back to top ↑</a>
+  </div>
 </footer>
 
-<script src="main.js" defer></script>
+<script src="main.js?v=19" defer></script>
 </body>
 </html>
