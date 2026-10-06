@@ -1594,4 +1594,5 @@ section[id] { scroll-margin-top: 72px; }
 .split__title { font-weight: 600; letter-spacing: -.035em; }
 .phero h1 { letter-spacing: -.04em; }
 /* inner-page heroes start just under the nav, not a screen-third down */
-.phero { padding-top: clamp(104px, 9vw, 132px); }
+.phero { padding-top: clamp(96px, 7vw, 112px); align-items: start; }
+.phero__text { padding-top: clamp(8px, 2.5vw, 40px); } /* text starts level with the top of the 3D model, not centred on its full height */
