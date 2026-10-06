@@ -38,10 +38,15 @@
       const r = hero.getBoundingClientRect();
       const travel = r.height - innerHeight;
       let p;
-      if (travel > 50) p = clamp(-r.top / travel, 0, 1);
-      else {
-        // phones: the hero is not pinned; the V takes off over a short scroll once the wordmark is fully in view
+      if (travel > 50) {
+        p = clamp(-r.top / travel, 0, 1);
+        root.style.removeProperty('--fly');
+      } else {
+        // phones: the hero is not pinned; the V takes off over a short scroll once the wordmark is fully in view,
+        // and climbs only up to the models (just under their switcher)
         const w = wordmark.getBoundingClientRect();
+        const models = hero.querySelector('.xray__nav') || hero.querySelector('.xray'); // stop under the model switcher
+        if (models) root.style.setProperty('--fly', `${Math.max(0, w.top - models.getBoundingClientRect().bottom - 6)}px`);
         const start = Math.max(0, w.bottom + scrollY - innerHeight);
         p = clamp((scrollY - start) / (innerHeight * 0.3), 0, 1);
       }
@@ -142,7 +147,7 @@
   const xr = document.getElementById('xray');
   if (xr) {
     const failed = () => { if (!xr.classList.contains('is-on')) xr.classList.add('is-off'); };
-    load(THREE_URL).then(() => load('hero3d.js?v=28')).then(failed, failed);
+    load(THREE_URL).then(() => load('hero3d.js?v=29')).then(failed, failed);
   }
 
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
@@ -187,7 +192,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=28'))
+        .then(() => load('game3d.js?v=29'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);
