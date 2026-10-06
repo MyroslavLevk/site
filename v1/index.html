@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=31">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script" crossorigin>
 </head>
 <body class="v2 v5">
@@ -240,13 +240,14 @@
           <div class="hcard__media hcard__media--night hcard__media--photo">
             <img src="img/sky-night.webp" alt="Night sky with the Milky Way" loading="lazy">
             <svg class="sys__sky sys__sky--ref" viewBox="0 0 1280 457" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-              <path class="sys__ray" d="M385 178L640 457M933 52L640 457M752 355L640 457"/>
+              <!-- reference stars sit on real bright stars of the photo, inside the band every card width shows -->
+              <path class="sys__ray" d="M385 178L640 457M871 139L640 457M719 304L640 457"/>
               <g class="sys__ref">
-                <circle cx="385" cy="178" r="5"/><circle cx="933" cy="52" r="5"/><circle cx="752" cy="355" r="5"/>
-                <path d="M363 166v-10h10M397 156h10v10M407 190v10h-10M373 200h-10v-10M911 40v-10h10M945 30h10v10M955 64v10h-10M921 74h-10v-10M730 343v-10h10M764 333h10v10M774 367v10h-10M740 377h-10v-10"/>
+                <circle cx="385" cy="178" r="5"/><circle cx="871" cy="139" r="5"/><circle cx="719" cy="304" r="5"/>
+                <path d="M363 166v-10h10M397 156h10v10M407 190v10h-10M373 200h-10v-10M849 127v-10h10M883 117h10v10M893 151v10h-10M859 161h-10v-10M697 292v-10h10M731 282h10v10M741 316v10h-10M707 326h-10v-10"/>
               </g>
               <g class="sys__lbl">
-                <text x="417" y="186">STAR 1</text><text x="899" y="60" text-anchor="end">STAR 2</text><text x="786" y="363">STAR 3</text>
+                <text x="417" y="186">STAR 1</text><text x="839" y="147" text-anchor="end">STAR 2</text><text x="751" y="312">STAR 3</text>
               </g>
               <path class="sys__sensor" d="M616 457a24 24 0 0 1 48 0z"/>
             </svg>
@@ -531,6 +532,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=29" defer></script>
+<script src="main.js?v=31" defer></script>
 </body>
 </html>

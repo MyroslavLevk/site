@@ -1569,3 +1569,7 @@ section[id] { scroll-margin-top: 72px; }
 @media (max-width: 860px) {
   .v5 .compare__row { text-align: center; justify-items: center; }
 }
+/* closing call-to-action bands (product, tests) stay centred as one block */
+.band.band--cta { justify-items: center; text-align: center; }
+.band--cta .band__title { margin-inline: auto; }
+.band--cta .phero__actions { justify-content: center; }
