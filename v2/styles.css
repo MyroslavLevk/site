@@ -1494,16 +1494,7 @@ section[id] { scroll-margin-top: 72px; }
 }
 /* phones: "can't find an answer" comes after the questions */
 @media (max-width: 860px) { .faq__ask { order: 0; } }
-/* narrow phones (360 px): the one-page nav has four links, so the logo keeps only its mark */
-.nav__logo .nav__word { display: inline; } /* an older rule hides logo spans below 760 px */
-@media (max-width: 420px) {
-  .nav__logo .nav__word { display: none; }
-  .v5 .nav { gap: 8px; }
-  .v5 .nav__links { gap: 11px; }
-}
-/* one-page nav has a fifth link, Home: on phones the logo drops its word, on the narrowest the logo itself is Home */
-@media (max-width: 600px) { .nav:has(.nav__home) .nav__logo .nav__word { display: none; } }
-@media (max-width: 420px) { .nav__home { display: none; } }
+
 
 /* StarNav / SolarNav: the card under the pointer widens, its neighbour narrows and dims (desktop only) */
 @media (hover: hover) and (min-width: 861px) {
@@ -1514,4 +1505,54 @@ section[id] { scroll-margin-top: 72px; }
   .hl:has(> :hover) > :not(:hover) { opacity: .6; }
   .hcard__media--photo img { transition: transform .8s var(--ease), filter .5s; }
   .hcard:hover .hcard__media--photo img { transform: scale(1.04); }
+}
+
+/* ---------- section headers: all numbered, all on the left, a readable eyebrow ---------- */
+.band { justify-items: stretch; }
+.band > .shead { width: 100%; margin-bottom: 0; }
+.shead__text > .mono, .split__text > .mono { font-size: clamp(14px, 1.2vw, 17px); color: color-mix(in srgb, var(--fg) 70%, transparent); }
+.awards, .awards[class] { max-width: none; }
+.band__foot { justify-items: start; text-align: left; }
+.benefits { justify-self: stretch; width: 100%; }
+.pbtn--center { justify-self: start; }
+.faq__grid { max-width: none; margin: 0; }
+#contact.band--cta { justify-items: start; text-align: left; }
+#contact.band--cta .band__title { text-align: left; }
+@media (max-width: 1100px) { .awards { max-width: none; } }
+
+/* ---------- one-page nav: every section; below 1100 px it folds into a Menu button ---------- */
+.nav__menu { display: none; }
+@media (max-width: 1100px) {
+  .nav:has(.nav__menu) .nav__menu {
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-left: auto; padding: 6px 10px;
+    border: 0; background: none; color: var(--fg);
+    font: 500 13px "Inter Tight", sans-serif; cursor: pointer;
+  }
+  .nav__menu i, .nav__menu i::before, .nav__menu i::after { display: block; width: 16px; height: 1.5px; background: currentColor; transition: transform .3s var(--ease), opacity .3s; }
+  .nav__menu i { position: relative; }
+  .nav__menu i::before, .nav__menu i::after { content: ""; position: absolute; left: 0; }
+  .nav__menu i::before { top: -5px; }
+  .nav__menu i::after { top: 5px; }
+  .nav.is-open .nav__menu i { background: transparent; }
+  .nav.is-open .nav__menu i::before { transform: translateY(5px) rotate(45deg); }
+  .nav.is-open .nav__menu i::after { transform: translateY(-5px) rotate(-45deg); }
+  .nav:has(.nav__menu) .nav__links {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    display: none; flex-direction: column; gap: 2px;
+    min-width: 220px; padding: 10px 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); font-size: 15px;
+  }
+  .nav.is-open .nav__links { display: flex; }
+  .nav:has(.nav__menu) .nav__links a { padding: 10px 0; }
+  .nav:has(.nav__menu) .nav__links a + a { border-top: 1px solid var(--line); }
+  .nav:has(.nav__menu) .nav__links a::after { display: none; }
+  .nav:has(.nav__menu) .nav__links a[aria-current] { color: var(--accent); }
+}
+/* phones: long figures (18x13x10 cm, "On request") wrap inside their column instead of pushing the page sideways */
+@media (max-width: 600px) {
+  .fig { min-width: 0; }
+  .fig b { font-size: clamp(34px, 11vw, 52px); }
+  .fig b.fig__text { font-size: clamp(22px, 7vw, 32px); }
 }

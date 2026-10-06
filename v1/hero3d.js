@@ -277,7 +277,7 @@
     const out = p < 1;
     const f = (k) => reduced ? 1 : out
       ? clamp01(1 - (p - k * 0.048) / 0.3)          // erase, one after another, over ~0.45 s each
-      : clamp01((since - 0.05 - k * 0.12) / 0.22); // type back in, one after another
+      : clamp01((since - k * 0.12) / 0.22);        // type back in right away, one after another
     pins.forEach((el, i) => typeTo(texts[i], f(ORDER[el.dataset.pin]), out));
     if (lead) {
       const len = lead.getTotalLength ? lead.getTotalLength() : 0;
@@ -411,7 +411,10 @@
     last = now;
     t += dt;
     if (list.length > 1 && !hover && p >= 1 && (idle += dt) > AUTO) { idle = 0; show(cur + 1, 1); }
-    if (p < 1) { p = Math.min(1, p + dt / FLIP); since = 0; } else since += dt;
+    if (p < 1) {
+      p = Math.min(1, p + dt / FLIP); since = 0;
+      if (ease(p) > 0.985) p = 1; // the sheet has reached the edge and faded out: the eased tail would only delay the labels
+    } else since += dt;
     render();
     raf = requestAnimationFrame(frame);
   }

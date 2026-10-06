@@ -87,6 +87,17 @@
     });
   }
 
+  /* ---------- one-page nav: the Menu button on tablets and phones ---------- */
+  const menuBtn = document.getElementById('navMenu');
+  if (menuBtn) {
+    const nav = document.getElementById('nav');
+    const setOpen = (open) => { nav.classList.toggle('is-open', open); menuBtn.setAttribute('aria-expanded', open); };
+    menuBtn.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
+    nav.querySelectorAll('.nav__links a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
+    document.addEventListener('click', (e) => { if (!nav.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
+  }
+
   /* ---------- one-page nav: underline the section in view ---------- */
   const spyLinks = [...document.querySelectorAll('.nav__links a[href^="#"]')];
   if (spyLinks.length) {
@@ -131,7 +142,7 @@
   const xr = document.getElementById('xray');
   if (xr) {
     const failed = () => { if (!xr.classList.contains('is-on')) xr.classList.add('is-off'); };
-    load(THREE_URL).then(() => load('hero3d.js?v=25')).then(failed, failed);
+    load(THREE_URL).then(() => load('hero3d.js?v=27')).then(failed, failed);
   }
 
   /* ---------- 3D mini-game: three.js is loaded only when the banner is near ---------- */
@@ -176,7 +187,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=25'))
+        .then(() => load('game3d.js?v=27'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

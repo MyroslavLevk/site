@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="styles.css?v=27">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script" crossorigin>
 </head>
 <body class="v2 v5">
@@ -45,7 +45,6 @@
 
       <div class="hero__top">
         <div class="hero__copy">
-          <p class="mono brandline"><svg class="mark mark--lead" viewBox="0 0 205.7 72.5" aria-hidden="true"><use href="img/logo.svg#m"/></svg><span><span class="sm-hide">Passive GPS-denied navigation <i class="dot">●</i> </span>BRAVE1 validated</span></p>
           <h1 class="hero__title">Navigate<br>without GPS.</h1>
           <p class="hero__text">A 100&nbsp;g module that steers by the stars at night and the sun by day.<span class="sm-hide"> Nothing to jam or detect.</span></p>
           <div class="hero__actions">
@@ -180,7 +179,12 @@
 
   <!-- VALIDATION: a full-width band with a centred title and a row of cards (Figma "Awards") -->
   <section class="band" id="validation" aria-labelledby="valTitle">
-    <h2 class="band__title reveal" id="valTitle">Validation</h2>
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">01 — Track record</span>
+        <h2 id="valTitle">Validation.</h2>
+      </div>
+    </div>
     <div class="awards" tabindex="0" aria-label="Validation and partners">
       <article class="award bcard reveal">
         <svg class="award__icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4l16 6v12c0 10-7 18-16 22C15 40 8 32 8 22V10z"/><path d="M16 24l6 6 10-12"/></svg>
@@ -217,7 +221,7 @@
   <section class="section v5s" id="product">
     <div class="shead reveal">
       <div class="shead__text">
-        <span class="mono">01 — The system</span>
+        <span class="mono">02 — The system</span>
         <h2>One module. Two skies.</h2>
         <p class="shead__p">StarNav and SolarNav are two modes of the same module: the night sky and the sun give an absolute heading that does not drift.</p>
       </div>
@@ -275,7 +279,7 @@
   <section class="section v5s" id="platforms">
     <div class="shead reveal">
       <div class="shead__text">
-        <span class="mono">02 — Where it works</span>
+        <span class="mono">03 — Where it works</span>
         <h2>One system. Three environments.</h2>
         <p class="shead__p">Open any card to drive the 3D simulation below in that environment.</p>
       </div>
@@ -386,9 +390,11 @@
 
   <!-- 03 WHY IT HOLDS: bracketed title over a row of benefit cards (Figma "Partners Benefits"), then the table -->
   <section class="band band--plain" id="how" aria-labelledby="howTitle">
-    <div class="btitle reveal">
-      <span class="mono">03 — Why it holds</span>
-      <h2 id="howTitle">Survives jamming. Does not drift.</h2>
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">04 — Why it holds</span>
+        <h2 id="howTitle">Survives jamming. Does not drift.</h2>
+      </div>
     </div>
     <div class="benefits reveal">
       <article class="benefit">
@@ -428,7 +434,7 @@
   <section class="section v5s" id="flight">
     <div class="shead reveal">
       <div class="shead__text">
-        <span class="mono">04 — Simulation</span>
+        <span class="mono">05 — Simulation</span>
         <h2>Onboard view: no operator, no GPS.</h2>
       </div>
     </div>
@@ -476,7 +482,12 @@
 
   <!-- FAQ: accordion left, "can't find an answer" right (Figma "FAQs") -->
   <section class="section v5s faq" id="faq" aria-labelledby="faqTitle">
-    <h2 class="faq__title reveal" id="faqTitle">Frequently asked questions</h2>
+    <div class="shead reveal">
+      <div class="shead__text">
+        <span class="mono">06 — FAQ</span>
+        <h2 id="faqTitle">Frequently asked questions.</h2>
+      </div>
+    </div>
     <div class="faq__grid">
       <div class="faq__list reveal">
         <details class="qa">
@@ -511,7 +522,7 @@
 
   <!-- 05 CONTACT: a closing call to action; details and the form are on contact.html -->
   <section class="band band--cta" id="contact" aria-labelledby="ctaTitle">
-    <span class="mono reveal">05 — Contact</span>
+    <span class="mono reveal">07 — Contact</span>
     <h2 class="band__title reveal" id="ctaTitle">Discuss integration.</h2>
     <p class="band__p reveal">Collaboration, testing or deployment. Accuracy figures and pricing on request. We respond within 24h.</p>
     <div class="phero__actions reveal">
@@ -541,6 +552,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=25" defer></script>
+<script src="main.js?v=27" defer></script>
 </body>
 </html>
