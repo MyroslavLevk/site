@@ -1504,3 +1504,14 @@ section[id] { scroll-margin-top: 72px; }
 /* one-page nav has a fifth link, Home: on phones the logo drops its word, on the narrowest the logo itself is Home */
 @media (max-width: 600px) { .nav:has(.nav__home) .nav__logo .nav__word { display: none; } }
 @media (max-width: 420px) { .nav__home { display: none; } }
+
+/* StarNav / SolarNav: the card under the pointer widens, its neighbour narrows and dims (desktop only) */
+@media (hover: hover) and (min-width: 861px) {
+  .hl { transition: grid-template-columns .6s var(--ease); }
+  .hl:has(> :first-child:hover) { grid-template-columns: 1.4fr 1fr; }
+  .hl:has(> :last-child:hover) { grid-template-columns: 1fr 1.4fr; }
+  .hl > * { transition: opacity .5s var(--ease); }
+  .hl:has(> :hover) > :not(:hover) { opacity: .6; }
+  .hcard__media--photo img { transition: transform .8s var(--ease), filter .5s; }
+  .hcard:hover .hcard__media--photo img { transform: scale(1.04); }
+}
