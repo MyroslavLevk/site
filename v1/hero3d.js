@@ -226,7 +226,7 @@
   scene.add(scan);
   // flip: the sheet sweeps across (dir = +1 left to right, -1 back); the new model shows on the
   // side it has passed, the old one on the side still ahead of it. p runs 0 -> 1 over FLIP s.
-  const FLIP = 1.2, R = 1.9;
+  const FLIP = 0.95, R = 1.9; // the scan sweep, seconds
   let cur = 0, from = -1, dir = 1, p = 1;
 
   scene.add(new T.HemisphereLight(0xffffff, 0x222222, 0.9));
@@ -276,7 +276,7 @@
   function callouts() {
     const out = p < 1;
     const f = (k) => reduced ? 1 : out
-      ? clamp01(1 - (p - k * 0.06) / 0.16)          // erase, one after another, early in the flip
+      ? clamp01(1 - (p - k * 0.076) / 0.46)         // erase, one after another, over ~0.45 s each
       : clamp01((since - 0.05 - k * 0.12) / 0.22); // type back in, one after another
     pins.forEach((el, i) => typeTo(texts[i], f(ORDER[el.dataset.pin]), out));
     if (lead) {
