@@ -1048,6 +1048,7 @@
       meander: [120, 170, 12, 18], lane: 6, agile: 1.5,
       obs: { every: [45, 80], kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine', 'stump', 'mast'] },
       gate: { chance: 0.12, kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine'], step: 5.5, slack: 1.4, shift: [5, 11], span: 26 },
+      clump: { chance: 0.25, kinds: ['deadtree', 'deadtree', 'tree', 'pine', 'trunk', 'trunk'], n: [4, 7], r: [4, 7] }, onLane: 0.2,
       scatter: [['deadtree', 800], ['stump', 1800], ['tree', 650], ['pine', 750], ['crater', 6000]],
       extras(s0, s1) {
         planForests(s1 + 50);
@@ -1082,6 +1083,7 @@
           amp: 0.35,
           obs: { every: [22, 36], kinds: ['mine', 'mine', 'buoy', 'hulk', 'hulk', 'boat', 'container', 'debris'] },
           gate: { chance: 0.25, kinds: ['boom', 'boom', 'boom', 'hulk', 'container'], step: 5, slack: 1.3, shift: [4, 9], span: 22 },
+          clump: { chance: 0.15, kinds: ['hulk', 'boat', 'container', 'debris'], n: [2, 4], r: [4, 7] },
           plumes: 8,
           scatter: [['hulk', 2200], ['boat', 3200], ['container', 3400], ['debris', 3000], ['barrel', 3600], ['mine', 4500], ['buoy', 4500]],
           extras(s0, s1) {
@@ -1103,6 +1105,7 @@
       meander: [80, 120, 6, 9], lane: 6, agile: 1.5, lines: 0.6, craters: 28, plumes: 2,
       obs: { every: [30, 55], kinds: ['stump', 'deadtree', 'rock', 'crater', 'fallen'] },
       gate: { chance: 0.08, kinds: ['hedgehog', 'hedgehog', 'block', 'stump', 'sandbags'], step: 3.2, slack: 1, shift: [3, 7], span: 16 },
+      clump: { chance: 0.15, kinds: ['deadtree', 'stump', 'stump', 'fallen', 'rock', 'tree'], n: [3, 5], r: [2.5, 4.5] }, onLane: 0.15,
       scatter: [['deadtree', 850], ['tree', 800], ['pine', 950], ['stump', 1600], ['rock', 1900], ['fallen', 2600], ['crater', 2400], ['sandbags', 6500]],
       extras(s0, s1) {
         planForests(s1 + 50);
@@ -1832,10 +1835,11 @@
     // on the battlefield, of a few free spots take the one furthest from everything else, so the
     // field fills evenly instead of in clumps with bare patches between them
     let best = null, bestRoom = -1;
+    const loose = Math.random() < (cfg.onLane || 0); // cfg.onLane = share not kept off the line ahead
     for (let i = 0, ok = 0; i < 12 && ok < (cfg.even || 1); i++) {
       const s = rand(s0, s1), x = xOf ? xOf(cx) : cx + rand(-cfg.band, cfg.band);
       if (s - w - cfg.margin < s0 + 8 && onRoute(x, s, w, h)) continue;
-      if (cfg.lane && Math.abs(x - lane(s)) < w + cfg.lane) continue;
+      if (cfg.lane && !loose && Math.abs(x - lane(s)) < w + cfg.lane) continue;
       if (overlaps(x, s, w)) continue;
       ok++;
       const r = cfg.even ? room(x, s) : 0;
@@ -1917,11 +1921,30 @@
     }
     gateAt = s;
   }
+  /* a clump right on the line ahead (cfg.clump): a stand of trees, a knot of wrecks, too wide
+     to slip past with a nudge, so the route has to commit to one side. Only in a step
+     without a gate; single obstacles then keep off it as off a gate. */
+  function clump(s0, s1) {
+    const C = cfg.clump;
+    if (!C || gateAt > -1e9 || !per(C.chance)) return;
+    const s = rand(s0 + (s1 - s0) * 0.6, s1 + 3), cx = lane(s), r = rand(C.r[0], C.r[1]);
+    if (Math.abs(cx) > cfg.limit - r - 8) return;                    // leave room to pass it on either side
+    for (let i = 0, n = Math.round(rand(C.n[0], C.n[1] + 0.99)); i < n; i++) {
+      const o = take(pick(C.kinds));
+      if (!o) continue;
+      const scale = o.userData.cls.fixed ? 1 : rand(0.85, 1.2), w = o.userData.cls.w * scale * Math.sqrt(grow(o.userData.type));
+      const a = rand(0, Math.PI * 2), d = i ? Math.sqrt(Math.random()) * r : 0;  // the first one dead centre
+      const x = cx + Math.cos(a) * d, ss = s + Math.sin(a) * d * 0.7;
+      if (objects.some((q) => q.visible && Math.hypot(x - q.position.x, ss - q.userData.s) < q.userData.w + w + 0.4)) { release(o); continue; }
+      put(o, x, ss, scale, 1);
+    }
+    gateAt = s;
+  }
   function inPath(s0, s1) {
     const a = wp[wp.length - 1];
     nextObs = Math.max(nextObs, s0 + (s1 - s0) * 0.55);    // early in a step the curve has not swung out yet
     for (; nextObs < s1; nextObs += rand(cfg.obs.every[0], cfg.obs.every[1])) {
-      const s = nextObs, x = lane(s) + rand(-2.5, 2.5);     // on the line the step is about to take
+      const s = nextObs, x = lane(s) + rand(-1, 1);         // on the line the step is about to take, near dead centre
       if (Math.abs(s - gateAt) < 12) continue;                         // the gate is enough there
       if (Math.abs(x) > cfg.limit - 8) continue;                       // leave room to pass it on either side
       const o = take(pick(cfg.obs.kinds));
@@ -2030,6 +2053,7 @@
     cfg.extras(s0, s1);
     gateAt = -1e9;
     gate(s0, s1);
+    clump(s0, s1);
     if (cfg.obs) inPath(s0, s1);
   }
 
