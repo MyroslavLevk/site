@@ -2508,10 +2508,12 @@
       const threat = !over && lat < u.w + cfg.margin + 2.5;
       u.thr = threat ? 2 : over ? 1 : 0;
       if (detailsOpen() && (threat || over) && !u.logged && d < 70) { u.logged = true; logDecision(u.cls.label, over ? 'OVERFLY' : 'AVOID', d); }
-      if (u.cls.quiet && !threat) continue; // a tree line is not a hundred targets: only trees by the track get a box
+      // tree lines and burnt forest get a box too, but only nearer in, so far off the view does not drown in brackets
+      const far = u.cls.quiet && !threat && !over ? 60 : 95;
+      if (d > far) continue;
       if (!layers.boxes) continue;
       const col = threat ? colors.accent : colors.ink;
-      h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
+      h2.globalAlpha = clamp((far - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
       h2.strokeStyle = h2.fillStyle = col;
       h2.lineWidth = threat ? 1.5 : 1;
       // corner brackets
