@@ -102,7 +102,7 @@
 
   /* ---------- hero: x-ray drone, once the page has loaded ---------- */
   if (document.getElementById('xray')) {
-    const start = () => load(THREE_URL).then(() => load('hero3d.js?v=18')).catch(() => {});
+    const start = () => load(THREE_URL).then(() => load('hero3d.js?v=1')).catch(() => {});
     if (document.readyState === 'complete') start(); else addEventListener('load', start);
   }
 
@@ -112,12 +112,18 @@
     // environment switch: the Air / Sea / Ground panels and the demo buttons drive the 3D scene.
     // window.fnavEnv covers the case where a panel is clicked before the 3D code has loaded.
     const envButtons = document.querySelectorAll('[data-env]');
-    const locBox = document.getElementById('simLoc'), locButtons = locBox.querySelectorAll('[data-loc]');
-    locButtons.forEach((b) => b.addEventListener('click', () => {
-      window.fnavLoc = b.dataset.loc;
-      document.dispatchEvent(new CustomEvent('locchange', { detail: b.dataset.loc }));
-      locButtons.forEach((o) => { o.classList.toggle('is-active', o === b); o.setAttribute('aria-pressed', o === b); });
-    }));
+    const locBox = document.getElementById('simLoc');
+    const syncLocation = () => {
+      const port = window.fnavLoc === 'port';
+      locBox.textContent = port ? 'Port → Open sea' : 'Open sea → Port';
+      locBox.setAttribute('aria-label', port ? 'Switch to open sea' : 'Switch to port approach');
+    };
+    locBox.addEventListener('click', () => {
+      window.fnavLoc = window.fnavLoc === 'port' ? 'open' : 'port';
+      syncLocation();
+      document.dispatchEvent(new CustomEvent('locchange', { detail: window.fnavLoc }));
+    });
+    syncLocation();
     const setEnv = (env, jump) => {
       window.fnavEnv = env;
       document.dispatchEvent(new CustomEvent('envchange', { detail: env }));
@@ -148,7 +154,7 @@
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'),
           load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js'),
         ]).catch(() => {}))
-        .then(() => load('game3d.js?v=18'))
+        .then(() => load('game3d.js?v=1'))
         .catch(() => { document.getElementById('hint').textContent = '3D engine failed to load'; });
     }, { rootMargin: '600px' });
     lazy.observe(game);

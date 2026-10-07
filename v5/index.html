@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@100..900&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=18">
+  <link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body class="v2 v5">
 
@@ -436,39 +436,96 @@
     </div>
     <div class="frame frame--demo reveal">
       <div class="demo">
-      <div class="demo__bar">
-        <div class="seg" role="group" aria-label="Environment">
-          <button class="tbtn is-active" type="button" data-env="air" aria-pressed="true">Air</button>
-          <button class="tbtn" type="button" data-env="sea" aria-pressed="false">Sea</button>
-          <button class="tbtn" type="button" data-env="ground" aria-pressed="false">Ground</button>
+        <div class="demo__bar">
+          <div class="seg" role="group" aria-label="Environment">
+            <button class="tbtn is-active" type="button" data-env="air" aria-pressed="true">Air</button>
+            <button class="tbtn" type="button" data-env="sea" aria-pressed="false">Sea</button>
+            <button class="tbtn" type="button" data-env="ground" aria-pressed="false">Ground</button>
+          </div>
+          <span class="mono demo__note">Simulation · illustrative, not test footage</span>
+          <div class="demo__ctl">
+            <button class="tbtn tbtn--main" id="simPlay" type="button">Pause</button>
+          </div>
         </div>
-        <div class="seg" id="simLoc" role="group" aria-label="Location" hidden>
-          <button class="tbtn is-active" type="button" data-loc="open" aria-pressed="true">Open sea</button>
-          <button class="tbtn" type="button" data-loc="port" aria-pressed="false">Port approach</button>
+        <div class="demo__body">
+          <div class="game" id="game">
+            <canvas id="gameCanvas" aria-label="Simulation: onboard camera of an autonomous drone that detects obstacles and flies around them"></canvas>
+            <canvas id="hudCanvas" aria-hidden="true"></canvas>
+            <div class="game__hud mono">
+              <span>GPS <b class="bad">NO SIGNAL</b></span>
+              <span>NAV <b id="navMode">STARNAV</b></span>
+              <span>MODE <b>AUTONOMOUS</b></span>
+            </div>
+            <p class="game__hint mono" id="hint"></p>
+            <button class="game__location" id="simLoc" type="button" hidden>Open sea → Port</button>
+          </div>
+
         </div>
-        <span class="mono demo__note">Simulation · illustrative, not test footage</span>
-        <div class="demo__ctl">
-          <button class="tbtn" id="simMode" type="button">Night · StarNav</button>
-          <button class="tbtn tbtn--main" id="simPlay" type="button">Pause</button>
+        <div class="demo__overview">
+            <dl class="dstats">
+              <div><dt class="mono">Speed</dt><dd><b id="spd">0</b><small>km/h</small></dd></div>
+              <div id="altBox"><dt class="mono" id="altLbl">Altitude</dt><dd><b id="alt">0</b><small id="altUnit">m</small></dd></div>
+              <div><dt class="mono">Tracked</dt><dd><b id="obj">0</b><small>obj</small></dd></div>
+              <div><dt class="mono">Distance</dt><dd><b id="dist">0</b><small>m</small></dd></div>
+            </dl>
+            <div class="dcard">
+              <div class="dcard__head mono"><span>Navigation source</span></div>
+              <div class="dnav" role="group" aria-label="Time of day">
+                <button class="dnav__opt" type="button" data-sky="night" aria-pressed="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.6 5.1L19 9.6l-4.4 3.2 1.7 5.2L12 14.8 7.7 18l1.7-5.2L5 9.6l5.4-1.5z"/></svg>
+                  <span><b>StarNav</b><small class="mono">Night · stars</small></span>
+                </button>
+                <button class="dnav__opt" type="button" data-sky="day" aria-pressed="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+                  <span><b>SolarNav</b><small class="mono">Day · sun</small></span>
+                </button>
+              </div>
+              <p class="dnote mono" id="refNote">3 star references locked</p>
+            </div>
         </div>
+        <div class="demo__quick">
+            <div class="dcard dcard--row">
+              <div>
+                <div class="dcard__head mono"><span>Sim speed</span></div>
+                <div class="dseg" role="group" aria-label="Simulation speed">
+                  <button type="button" data-rate="0.5" aria-pressed="false">½×</button>
+                  <button type="button" data-rate="1" aria-pressed="true">1×</button>
+                  <button type="button" data-rate="2" aria-pressed="false">2×</button>
+                </div>
+              </div>
+              <div>
+                <div class="dcard__head mono"><span>Render</span><i class="dfps" id="simFps">— fps</i></div>
+                <div class="dseg" role="group" aria-label="Render quality">
+                  <button type="button" data-q="0" aria-pressed="false" title="30 fps, no shadows">Eco</button>
+                  <button type="button" data-q="1" aria-pressed="true" title="30 fps, soft shadows">Std</button>
+                  <button type="button" data-q="2" aria-pressed="false" title="60 fps, full detail">Max</button>
+                </div>
+              </div>
+            </div>
+        </div>
+        <details class="demo__details" id="simDetails">
+          <summary>Simulation details</summary>
+          <div class="demo__technical">
+            <div class="dcard dcard--map">
+              <div class="dcard__head mono"><span>Route plan · top view</span><i class="dlive">live</i></div>
+              <canvas id="miniMap" aria-label="Top view of the planned route and the obstacles ahead"></canvas>
+              <ul class="dkey mono" aria-hidden="true"><li><b class="dk dk--route"></b>Route</li><li><b class="dk dk--obj"></b>Object</li><li><b class="dk dk--threat"></b>Avoid</li></ul>
+            </div>
+            <div class="dcard">
+              <div class="dcard__head mono"><span>Onboard overlay</span></div>
+              <div class="dsw">
+                <label><input type="checkbox" data-layer="boxes" checked><i></i><span>Detections</span></label>
+                <label><input type="checkbox" data-layer="route" checked><i></i><span>Planned route</span></label>
+                <label><input type="checkbox" data-layer="refs" checked><i></i><span>Sky references</span></label>
+              </div>
+            </div>
+            <div class="dcard">
+              <div class="dcard__head mono"><span>Decision log</span></div>
+              <ol class="dlog mono" id="simLog" aria-live="off"><li class="dlog__empty">Waiting for the first obstacle…</li></ol>
+            </div>
+          </div>
+        </details>
       </div>
-      <div class="game" id="game">
-        <canvas id="gameCanvas" aria-label="Simulation: onboard camera of an autonomous drone that detects obstacles and flies around them"></canvas>
-        <canvas id="hudCanvas" aria-hidden="true"></canvas>
-        <div class="game__hud mono">
-          <span>GPS <b class="bad">NO SIGNAL</b></span>
-          <span>NAV <b id="navMode">STARNAV</b></span>
-          <span>MODE <b>AUTONOMOUS</b></span>
-        </div>
-        <div class="game__hud game__hud--r mono">
-          <span>SPD <b id="spd">0</b> km/h</span>
-          <span id="altBox">ALT <b id="alt">0</b> m</span>
-          <span>OBJ <b id="obj">0</b></span>
-          <span>DIST <b id="dist">0</b> m</span>
-        </div>
-        <p class="game__hint mono" id="hint"></p>
-      </div>
-    </div>
     </div>
   </section>
 
@@ -545,6 +602,6 @@
   </div>
 </footer>
 
-<script src="main.js?v=18" defer></script>
+<script src="main.js?v=1" defer></script>
 </body>
 </html>

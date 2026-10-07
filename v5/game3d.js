@@ -7,7 +7,11 @@
   const hud = document.getElementById('hudCanvas');
   const h2 = hud.getContext('2d');
   const el = (id) => document.getElementById(id);
-  const spdEl = el('spd'), altEl = el('alt'), altBox = el('altBox'), objEl = el('obj'), distEl = el('dist'), modeEl = el('navMode');
+  const spdEl = el('spd'), altEl = el('alt'), objEl = el('obj'), distEl = el('dist'), modeEl = el('navMode');
+  const altLbl = el('altLbl'), altUnit = el('altUnit'), refNote = el('refNote'), fpsEl = el('simFps'), logEl = el('simLog');
+  const map = el('miniMap'), m2 = map && map.getContext('2d');
+  const details = el('simDetails');
+  const detailsOpen = () => !details || details.open;
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -21,24 +25,26 @@
     el('hint').textContent = 'WebGL is not available on this device';
     return;
   }
-  const DPR = Math.min(devicePixelRatio || 1, 1.75); // HUD canvas; the 3D view follows the quality level
-  /* Quality levels. Phones and weak machines start lower; while the demo runs, the frame
-     rate is measured and the level is stepped down (never up) if it stays low.
+  const DPR = Math.min(devicePixelRatio || 1, 1.5); // HUD canvases; the 3D view follows the quality level
+  /* Quality levels (the Eco / Std / Max switch beside the view). Phones and weak machines start
+     on Eco; while the demo runs, the frame rate is measured and, unless the visitor picked a
+     level, it is stepped down (never up) if it stays low.
      dpr = render resolution cap, shadow = shadow map size (0 = none), density = share of
-     scattered objects, litter = share of battlefield litter, fine = dense ground / water grids. */
+     scattered objects, litter = share of battlefield litter, fine = dense ground / water grids,
+     fps = frame cap: the view is a slow onboard camera, 30 fps reads smooth and halves the work. */
   const QUALITY = [
-    { dpr: 1, shadow: 0, density: 0.45, litter: 0.35, fine: false },
-    { dpr: 1.25, shadow: 1024, density: 0.7, litter: 0.6, fine: false },
-    { dpr: 1.75, shadow: 2048, density: 1, litter: 1, fine: true },
+    { dpr: 1, shadow: 0, density: 0.5, litter: 0.4, fine: false, fps: 30 },
+    { dpr: 1.5, shadow: 1024, density: 1, litter: 0.85, fine: false, fps: 30 },
+    { dpr: 1.75, shadow: 2048, density: 1, litter: 1, fine: true, fps: 60 },
   ];
   const phone = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 600;
   const weak = (navigator.deviceMemory || 8) <= 2 || (navigator.hardwareConcurrency || 8) <= 2;
-  let quality = weak ? 0 : phone ? 1 : 2, Q = QUALITY[quality];
+  let quality = weak || phone ? 0 : 1, Q = QUALITY[quality], userQ = false;
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, Q.dpr));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap; // the shadows are faint under the overcast: the soft filter cost more than it showed
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x000000, 0.014);
@@ -117,7 +123,7 @@
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
-      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < ${quality === 2 ? 5 : 4}; i++) { v += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
+      float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < ${weak || phone ? 4 : 5}; i++) { v += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
       void main(){
         vec3 d = normalize(vDir);
         if (d.y <= 0.0) discard;
@@ -260,6 +266,44 @@
     .map((d) => new THREE.Vector3(...d).normalize().multiplyScalar(400));
   navStars.forEach((p) => { const s = glow(0xcfe0ff, 14); s.position.copy(p); stars.add(s); });
 
+  /* ----- which of them the navigator has. The real camera looks straight up, so a star (or the
+     sun) counts whenever no cloud covers it, wherever the view in the demo points; with none
+     left the platform navigates by vision. The cloud cover is worked out as in the cloud
+     shader, in float32 maths, so the two agree. ----- */
+  const f32 = Math.fround, fract = (x) => x - Math.floor(x), mix = (a, b, t) => a + (b - a) * t;
+  const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const cHash = (x, y) => {
+    x = fract(f32(x * 123.34)); y = fract(f32(y * 456.21));
+    const d = f32(f32(x * f32(x + 45.32)) + f32(y * f32(y + 45.32)));
+    return fract(f32(f32(x + d) * f32(y + d)));
+  };
+  const cNoise = (x, y) => {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    let fx = x - ix, fy = y - iy;
+    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    return mix(mix(cHash(ix, iy), cHash(ix + 1, iy), fx), mix(cHash(ix, iy + 1), cHash(ix + 1, iy + 1), fx), fy);
+  };
+  const cDir = new THREE.Vector3();
+  const cloudAt = (p) => {
+    const d = cDir.copy(p).normalize();
+    if (d.y <= 0) return 0;
+    const t = cloudMat.uniforms.uTime.value, c = cloudMat.uniforms.uCover.value;
+    let x = d.x / (d.y + 0.12) * 1.3 + t * 0.012, y = d.z / (d.y + 0.12) * 1.3 + t * 0.004, n = 0, a = 0.5;
+    for (let i = 0; i < (weak || phone ? 4 : 5); i++) { n += a * cNoise(x, y); x = x * 2.03 + 17.1; y = y * 2.03 + 17.1; a *= 0.5; }
+    return sstep(c, c + 0.28, n) * sstep(0, 0.22, d.y);
+  };
+  const refLocked = (p) => cloudAt(p) < 0.5;
+  let navRefs = [], navKey = '';
+  function updateNav() {
+    navRefs = (day ? [disc.position] : navStars).filter(refLocked);
+    const n = navRefs.length, key = `${day}${n}`;
+    if (key === navKey) return;
+    navKey = key;
+    modeEl.textContent = !n ? 'VISION' : day ? 'SOLARNAV' : 'STARNAV';
+    refNote.textContent = !n ? `${day ? 'Sun' : 'Stars'} behind cloud · vision navigation`
+      : day ? 'Sun reference locked' : `${n} star reference${n > 1 ? 's' : ''} locked`;
+  }
+
   /* ----- terrain: gentle rolling ground, the same function on the CPU (to stand objects
      and the camera on it) and in the ground shader. x across, s along the route.
      On the battlefield it also gets small bumps and shell craters (bowl + raised rim). ----- */
@@ -312,8 +356,8 @@
     deep: { value: new THREE.Color() }, shallow: { value: new THREE.Color() }, foam: { value: new THREE.Color() },
   };
 
-  /* ----- the dirt road on the battlefield: a smoothed copy of the route (the vehicle keeps to it
-     and leaves it only to get round something), drawn by the ground shader with wheel ruts and
+  /* ----- old vehicle tracks, independent of the current platform's planned route,
+     drawn by the ground shader with wheel ruts and
      puddles. Its centre line, 1 m a texel from ROAD_BACK metres behind, is packed into a small
      texture (x as 16 bits in two channels), refreshed whenever a metre has been driven. ----- */
   const ROAD_N = 256, ROAD_BACK = 20, ROAD_SPAN = 400;
@@ -998,21 +1042,22 @@
     // lines, wrecked farms, burnt-out vehicles, broken pylons, now and then a burnt forest
     air: {
       speed: 17, margin: 1.8, band: 72, limit: 62, slope: 0.5, seg: [30, 42], segRef: 50, relief: 3, bumps: 0.12,
-      litter: 0.4, forest: 0.4, rows: 1.6, // lighter than the ground: share of litter, density of burnt forest, spacing in tree lines
+      litter: 0.22, forest: 0.7, rows: 1.1, lines: 0.4, positions: 0.04, craters: 18, plumes: 2,
+      size: { tree: 1.8, pine: 1.7, deadtree: 1.5, trunk: 1.4 }, // trees at full height (wider by the square root)
       alts: [2.6, 7, 15], climb: 0.2, overfly: 1.5,
       meander: [120, 170, 12, 18], lane: 6, agile: 1.5,
-      obs: { every: [16, 28], kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine', 'stump', 'mast'] },
-      gate: { chance: 0.5, kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine'], step: 5.5, slack: 1.4, shift: [5, 11], span: 26 },
-      scatter: [['deadtree', 900], ['stump', 1600], ['tree', 2600], ['pine', 3200], ['crater', 2600], ['hedgehog', 5000]],
+      obs: { every: [45, 80], kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine', 'stump', 'mast'] },
+      gate: { chance: 0.12, kinds: ['deadtree', 'deadtree', 'trunk', 'tree', 'pine'], step: 5.5, slack: 1.4, shift: [5, 11], span: 26 },
+      scatter: [['deadtree', 800], ['stump', 1800], ['tree', 650], ['pine', 750], ['crater', 6000]],
       extras(s0, s1) {
         planForests(s1 + 50);
         burntForest(s0, s1);
         treeLines(s0, s1);
-        if (per(0.25)) ruins(s0, s1);
-        if (per(0.35)) scatter('wreck', s0, s1);
-        if (per(0.25)) scatter('truck', s0, s1);
-        if (per(0.1)) defenceBelt(s0, s1);
-        if (per(0.15)) scatter('mast', s0, s1);
+        if (per(0.05)) ruins(s0, s1);
+        if (per(0.06)) scatter('wreck', s0, s1);
+        if (per(0.04)) scatter('truck', s0, s1);
+        if (per(0.02)) defenceBelt(s0, s1);
+        if (per(0.04)) scatter('mast', s0, s1);
         for (let k = 0; k < 2; k++) if (freeFields.length && per(0.6)) placeField(s0, s1);
       },
     },
@@ -1023,21 +1068,22 @@
       // two locations: open water with a heavy swell, and the sheltered approach to a port
       locs: {
         open: {
-          amp: 1,
-          obs: { every: [14, 24], kinds: ['mine', 'mine', 'mine', 'buoy', 'hulk', 'hulk', 'debris', 'log', 'barrel', 'boat'] },
-          gate: { chance: 0.35, kinds: ['boom', 'boom', 'boom', 'mine', 'mine'], step: 4.5, slack: 1.3, shift: [4, 9], span: 22 },
-          scatter: [['debris', 1300], ['log', 1500], ['barrel', 1300], ['mine', 2000], ['hulk', 2600], ['buoy', 3200], ['boat', 4000], ['container', 4000]],
+          amp: 1, plumes: 0, meander: [350, 600, 1, 3],
+          obs: { every: [280, 520], kinds: ['debris', 'log', 'buoy', 'boat'] },
+          gate: { chance: 0, kinds: ['boom', 'boom', 'boom', 'mine', 'mine'], step: 4.5, slack: 1.3, shift: [4, 9], span: 22 },
+          // open water is mostly empty: now and then a mine, flotsam, a boat far off
+          scatter: [['debris', 45000], ['log', 65000], ['buoy', 85000], ['boat', 110000]],
           extras(s0, s1) {
-            if (per(0.2)) scatter('cargoship', s0, s1);
-            if (per(0.1)) scatter('lighthouse', s0, s1);
+            if (per(0.02)) scatter('cargoship', s0, s1);
+            
           },
         },
         port: {
           amp: 0.35,
-          obs: { every: [14, 22], kinds: ['mine', 'mine', 'buoy', 'hulk', 'hulk', 'boat', 'container', 'debris'] },
-          gate: { chance: 0.4, kinds: ['boom', 'boom', 'boom', 'hulk', 'container'], step: 5, slack: 1.3, shift: [4, 9], span: 22 },
+          obs: { every: [22, 36], kinds: ['mine', 'mine', 'buoy', 'hulk', 'hulk', 'boat', 'container', 'debris'] },
+          gate: { chance: 0.25, kinds: ['boom', 'boom', 'boom', 'hulk', 'container'], step: 5, slack: 1.3, shift: [4, 9], span: 22 },
           plumes: 8,
-          scatter: [['hulk', 1100], ['boat', 1800], ['container', 1700], ['debris', 1300], ['barrel', 1700], ['mine', 2600], ['buoy', 2600]],
+          scatter: [['hulk', 2200], ['boat', 3200], ['container', 3400], ['debris', 3000], ['barrel', 3600], ['mine', 4500], ['buoy', 4500]],
           extras(s0, s1) {
             if (per(0.5)) placeCrane(s0, s1);
             if (per(0.6)) scatter('port', s0, s1);
@@ -1053,21 +1099,21 @@
     // the grey zone of today's front: open fields between shelled tree lines, positions dug
     // into those tree lines, belts of dragon's teeth and wire, burnt-out vehicles, no one in the open
     ground: {
-      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.5, seg: [20, 28], segRef: 34, relief: 1.4, bumps: 0.16, even: 4,
-      meander: [80, 120, 6, 9], lane: 6, agile: 1.5, lines: 0.6, // tree lines: chance of one across per step
-      obs: { every: [10, 20], kinds: ['stump', 'stump', 'deadtree', 'crater', 'crater', 'hedgehog', 'hedgehog', 'hedgehog', 'sandbags', 'sandbags', 'block', 'wire', 'wreck', 'truck'] },
-      gate: { chance: 0.35, kinds: ['hedgehog', 'hedgehog', 'block', 'stump', 'sandbags'], step: 3.2, slack: 1, shift: [3, 7], span: 16 },
-      scatter: [['deadtree', 400], ['stump', 460], ['crater', 950], ['hedgehog', 800], ['sandbags', 1300], ['wire', 3000], ['block', 3400]],
+      alt: 1.3, speed: 7, margin: 1.2, band: 65, limit: 50, slope: 0.5, seg: [20, 28], segRef: 34, relief: 1.8, bumps: 0.12, even: 2, litter: 0.5, grass: 1, forest: 0.65, rows: 1.25, positions: 0.12, size: { tree: 1.8, pine: 1.7, deadtree: 1.7, trunk: 1.5 },
+      meander: [80, 120, 6, 9], lane: 6, agile: 1.5, lines: 0.6, craters: 28, plumes: 2,
+      obs: { every: [30, 55], kinds: ['stump', 'deadtree', 'rock', 'crater', 'fallen'] },
+      gate: { chance: 0.08, kinds: ['hedgehog', 'hedgehog', 'block', 'stump', 'sandbags'], step: 3.2, slack: 1, shift: [3, 7], span: 16 },
+      scatter: [['deadtree', 850], ['tree', 800], ['pine', 950], ['stump', 1600], ['rock', 1900], ['fallen', 2600], ['crater', 2400], ['sandbags', 6500]],
       extras(s0, s1) {
         planForests(s1 + 50);
         burntForest(s0, s1);
         treeLines(s0, s1);
-        if (per(0.2)) bigPit(s0, s1);
-        if (per(0.12)) ruins(s0, s1);
-        if (per(0.07)) checkpoint(s0, s1);
-        if (per(0.13)) defenceBelt(s0, s1);
-        if (per(0.4)) scatter('wreck', s0, s1);
-        if (per(0.3)) scatter('truck', s0, s1);
+        if (per(0.07)) bigPit(s0, s1);
+        if (per(0.05)) ruins(s0, s1);
+        if (per(0.03)) checkpoint(s0, s1);
+        if (per(0.04)) defenceBelt(s0, s1);
+        if (per(0.1)) scatter('wreck', s0, s1);
+        if (per(0.06)) scatter('truck', s0, s1);
       },
     },
   };
@@ -1162,8 +1208,8 @@
   const BURNT_TONE = [0.25, [1.25, 1, 0.8]];
   const MODELS = {
     // tone: the toy-bright kits dulled to the greys and rust of the front (see prepare)
-    pine: { env: 'air', fit: 'h', set: true, files: ['trees/pines'], tone: [0.8, 0.55, [0.95, 0.95, 0.9]] },
-    tree: { env: 'air', fit: 'h', set: true, files: ['trees/pack01'], tone: [0.8, 0.5, [1, 0.95, 0.85]] },
+    pine: { env: ['air', 'ground'], fit: 'h', set: true, files: ['trees/pines'], tone: [0.8, 0.55, [0.95, 0.95, 0.9]] },
+    tree: { env: ['air', 'ground'], fit: 'h', set: true, files: ['trees/pack01'], tone: [0.8, 0.5, [1, 0.95, 0.85]] },
     log: { env: 'sea', fit: 'w', files: ['log_large', 'log'], tone: [0.35, 0.4, [1, 0.92, 0.85]] },
     buoy: { env: 'sea', fit: 'h', files: ['watercraft/buoy', 'watercraft/buoy-flag'], tone: [0.7, 0.35, [1, 0.95, 0.9]] },
     container: { env: 'sea', fit: 'w', files: ['watercraft/cargo-container-a', 'watercraft/cargo-container-b', 'watercraft/cargo-container-c'], tone: [0.55, 0.2, [1.2, 1, 0.85]] },
@@ -1352,7 +1398,7 @@
   }
   LITTER.forEach(addLitter);
   // how many pieces are drawn, and whether they cast shadows (grass never does: thousands of cut-out cards)
-  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter * (cfg.litter || 1)); im.castShadow = quality === 2 && !K.grass; });
+  const litterQuality = (K) => K.meshes.forEach((im) => { im.count = Math.round(K.n * Q.litter * (K.grass ? (cfg.grass ?? cfg.litter ?? 1) : (cfg.litter ?? 1))); im.castShadow = quality === 2 && !K.grass; });
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e3 = new THREE.Euler(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
   // stand piece i of kind K on the ground; the group sits at z = dist, so a piece's local z is -s
   function setLitter(K, i) {
@@ -1439,7 +1485,7 @@
   }
   function updateLitter() {
     litter.position.z = dist;
-    for (let i = 0; i < CR_RAND; i++) if (craters[i].y < dist - 10) spawnCrater(craters[i], dist + DEPTH - 30, dist + DEPTH);
+    for (let i = 0; i < (cfg.craters ?? CR_RAND); i++) if (craters[i].y < dist - 10) spawnCrater(craters[i], dist + DEPTH - 30, dist + DEPTH);
     // craters being dug as they come closer (see crFade): keep the litter on them lying on the ground
     const digging = craters.filter((c) => c.w > 0 && c.y - dist > CR_NEAR - 2 * c.z && c.y - dist < CR_FAR + 2 * c.z);
     const s0 = dist + CR_NEAR - 10, s1 = dist + CR_FAR + 10;
@@ -1572,7 +1618,7 @@
     p.tongues.forEach((t) => Object.assign(t, { dx: rand(-spread, spread), dz: rand(-spread, spread), w: rand(0.7, 1.4) * big + 0.3, h: rand(1.4, 3.2) * big + 0.4 }));
   }
   function updateSmoke() {
-    const active = cfg.plumes || 5;
+    const active = cfg.plumes ?? 5;
     plumes.forEach((p, k) => {
       if (k >= active) p.s = -1e6;                       // not in use here: an old puff, invisible
       else if (p.s < dist - 20) spawnPlume(p, dist + 90, dist + DEPTH);
@@ -1714,12 +1760,10 @@
     return hermite(a[k], a[v], b[k], b[v], b.s - a.s, clamp((s - a.s) / (b.s - a.s), 0, 1), order);
   }
   const pathX = (s) => route(s, 0);
-  // the road: the route averaged over 60 m, so it runs smooth through the swerves round obstacles
-  const roadX = (s) => {
-    let sum = 0, wsum = 0;
-    for (let o = -30; o <= 30; o += 5) { const w = 31 - Math.abs(o); sum += pathX(s + o) * w; wsum += w; }
-    return sum / wsum;
-  };
+  // Old tracks stay fixed in world coordinates. Their bends never follow navigation
+  // waypoints: the platform can cross them, run beside them, or leave them behind.
+  const roadX = (s) => 32 * Math.sin(s * 0.009 + 1.1)
+    + 12 * Math.sin(s * 0.021 - 0.7) - 6;
   let roadFrom = -1e9;
   function updateRoad() {
     const s0 = Math.floor(dist) - ROAD_BACK;
@@ -1758,9 +1802,11 @@
     return d;
   };
 
+  // how much taller (and, by the square root, wider) a class stands in this environment
+  const grow = (type) => (cfg.size && cfg.size[type]) || 1;
   function put(o, x, s, scale, side) {
-    const c = o.userData.cls, w = c.w * scale;
-    o.scale.setScalar(scale);
+    const c = o.userData.cls, k = grow(o.userData.type), kw = Math.sqrt(k), w = c.w * scale * kw;
+    o.scale.set(scale * kw, scale * k, scale * kw);
     o.rotation.set(0, c.face ? (side > 0 ? 0 : Math.PI)
       : c.across ? rand(-0.25, 0.25)
       : c.along ? rand(-0.12, 0.12) + (Math.random() < 0.5 ? 0 : Math.PI)
@@ -1771,7 +1817,7 @@
     let y = terrainH(x, s, true);
     if (terrA) for (const [dx, ds] of [[w, 0], [-w, 0], [0, w], [0, -w]]) y = Math.min(y, terrainH(x + dx, s + ds, true));
     o.position.set(x, y, dist - s);
-    Object.assign(o.userData, { s, w, h: c.h * scale, conf: rand(0.84, 0.95), phase: rand(0, 6) });
+    Object.assign(o.userData, { s, w, h: c.h * scale * k, conf: rand(0.84, 0.95), phase: rand(0, 6), thr: 0, logged: false });
     o.visible = true;
     bindInst(o);
   }
@@ -1781,7 +1827,7 @@
   function scatter(type, s0, s1, xOf) {
     const o = take(type);
     if (!o) return;
-    const c = o.userData.cls, scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale, h = c.h * scale;
+    const c = o.userData.cls, k = grow(type), scale = c.fixed ? 1 : rand(0.8, 1.35), w = c.w * scale * Math.sqrt(k), h = c.h * scale * k;
     const cx = wp[wp.length - 1].x;
     // on the battlefield, of a few free spots take the one furthest from everything else, so the
     // field fills evenly instead of in clumps with bare patches between them
@@ -1803,7 +1849,7 @@
      standing on the front: rows of leafless, shelled trees and snapped trunks. Every so often
      one crosses the track, with a gap where the track runs through, and the positions are dug
      in along it: a trench, a dugout, sandbags. Others run beside the track for a while. ----- */
-  const TREES = { deadtree: true, stump: true, trunk: true };
+  const TREES = { tree: true, pine: true, deadtree: true, stump: true, trunk: true };
   // stand one piece of a row at (x, s), if nothing bigger is there (trees in a row may stand close)
   function plant(type, x, s) {
     if (TREES[type] && cfg.lane && Math.abs(x - lane(s)) < cfg.lane) return null; // room to swerve round what is put on the lane
@@ -1813,7 +1859,7 @@
     put(o, x, s, o.userData.cls.fixed ? 1 : rand(0.8, 1.3), 1);
     return o;
   }
-  const treeOrStump = () => (Math.random() < 0.7 ? 'deadtree' : 'stump');
+  const treeOrStump = () => pick(['tree', 'pine', 'deadtree', 'deadtree', 'stump']);
   const rowStep = () => rand(2.6, 4.6) / Math.sqrt(Q.density) * (cfg.rows || 1);
   let alongs = []; // tree lines running beside the track: { x at s0, drift dx/ds, end }
   function treeLines(s0, s1) {
@@ -1826,7 +1872,7 @@
         plant(treeOrStump(), x, s + (x - a.x) * tilt + rand(-1.2, 1.2));
       }
       // the position along it, on the far side, away from the track
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < 2 && per(cfg.positions ?? 0.1); k++) {
         const side = Math.random() < 0.5 ? -1 : 1, x = gap + side * rand(14, band * 0.8), ss = s + (x - a.x) * tilt + 5;
         const kind = k === 0 ? 'trench' : Math.random() < 0.5 ? 'dugout' : 'sandbags';
         const o = plant(kind, x, ss);
@@ -1865,7 +1911,7 @@
       if (!o) continue;
       const scale = o.userData.cls.fixed ? 1 : rand(0.85, 1.1), ss = s + rand(-1.2, 1.2);
       // the way through: room for the platform and its margin, with a little to spare
-      if (Math.abs(x - gapX) < o.userData.cls.w * scale + cfg.margin + G.slack) { release(o); continue; }
+      if (Math.abs(x - gapX) < o.userData.cls.w * scale * Math.sqrt(grow(o.userData.type)) + cfg.margin + G.slack) { release(o); continue; }
       if (objects.some((q) => q.visible && Math.hypot(x - q.position.x, ss - q.userData.s) < q.userData.w + 0.6)) { release(o); continue; }
       put(o, x, ss, scale, 1);
     }
@@ -2153,11 +2199,11 @@
     cu.uShade.value.set(day ? (grd ? 0x5d6064 : 0x8a9098) : 0x0a0d14);
     cu.uSunDir.value.copy(SKY_POS).normalize();
     cu.uSunCol.value.set(day ? 0xffe2b0 : 0x55607a);
-    modeEl.textContent = day ? 'SOLARNAV' : 'STARNAV';
-    altBox.firstChild.textContent = sea ? 'SWELL ' : envName === 'ground' ? 'TILT ' : 'ALT ';
-    altBox.lastChild.textContent = envName === 'ground' ? '°' : ' m';
+    altLbl.textContent = sea ? 'Swell' : envName === 'ground' ? 'Tilt' : 'Altitude';
+    altUnit.textContent = envName === 'ground' ? '°' : 'm';
+    navKey = ''; updateNav();
     const s = getComputedStyle(root);
-    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#161a12' : '#e9e6d6' };
+    colors = { accent: s.getPropertyValue('--accent').trim(), ink: day ? '#161a12' : '#e9e6d6', fg: s.getPropertyValue('--fg').trim() };
     if (!raf) { pose(); render(); }
   }
   document.addEventListener('themechange', applyLook); // only the accent colour follows the site theme
@@ -2174,6 +2220,7 @@
     U.ash.value.set(-1e6, -1e6, -1e6, -1e6);
     U.roadOn.value = U.wet.value = name === 'ground' ? 1 : 0;
     fpsWarm = 2.5;
+    if (logEl) { logEl.innerHTML = '<li class="dlog__empty">Waiting for the first obstacle…</li>'; logged = 0; }
     loadModels(name);
     if (name !== 'sea') loadGrass();
     objects.forEach((o) => { if (o.visible) release(o); });
@@ -2183,11 +2230,13 @@
     reset();
     litter.visible = name !== 'sea';
     LITTER.forEach(litterQuality);
-    smoke.visible = mist.visible = true;
+    smoke.visible = (cfg.plumes ?? 5) > 0;
+    flames.visible = smoke.visible;
+    mist.visible = true;
     banks.forEach((b, i) => spawnBank(b, dist + 25 + i * 30, dist + 60 + i * 30));
     plumes.forEach((p, i) => spawnPlume(p, dist + 30 + i * 35, dist + 60 + i * 35));
     if (name !== 'sea') {
-      craters.forEach((c, i) => { if (i < CR_RAND) spawnCrater(c, dist + 6, dist + DEPTH); });
+      craters.forEach((c, i) => { if (i < (cfg.craters ?? CR_RAND)) spawnCrater(c, dist + 6, dist + DEPTH); });
       LITTER.forEach((K, k) => scatterLitter(k));
     }
     applyLook();
@@ -2297,6 +2346,7 @@
     updateSmoke();
     if (!day) updateFlashes(dt);
     updateClouds(dt);
+    updateNav();
     updateDrops(dt);
     if (mist.visible) updateMist();
     sun.target.position.set(cx, y - 3, -28);
@@ -2406,9 +2456,10 @@
     const cx = W / 2, cy = H / 2;
 
     // sky references the navigator is locked on
-    const refs = day ? [disc.position] : navStars;
+    const refs = layers.refs ? navRefs : [];
     h2.strokeStyle = h2.fillStyle = colors.accent;
-    refs.forEach((p, i) => {
+    refs.forEach((p) => {
+      const i = navStars.indexOf(p);
       v.copy(p).applyAxisAngle(Y_AXIS, heading);
       const s = toScreen(v.x + skyGroup.position.x, v.y, v.z);
       if (!s || s[0] < 0 || s[0] > W || s[1] < 0 || s[1] > H) return;
@@ -2421,6 +2472,7 @@
 
     // planned route on the surface
     const sea = envName === 'sea';
+    if (layers.route) {
     h2.globalAlpha = 0.9;
     h2.lineWidth = 1.5;
     h2.setLineDash([6, 6]);
@@ -2434,6 +2486,7 @@
     }
     h2.stroke();
     h2.setLineDash([]);
+    }
 
     // detections
     tracked = 0;
@@ -2453,7 +2506,10 @@
       const lat = Math.abs(o.position.x - pathX(u.s));
       const over = !!cfg.overfly && lat < u.w + cfg.margin && pathY(u.s) >= u.h + cfg.overfly;
       const threat = !over && lat < u.w + cfg.margin + 2.5;
+      u.thr = threat ? 2 : over ? 1 : 0;
+      if (detailsOpen() && (threat || over) && !u.logged && d < 70) { u.logged = true; logDecision(u.cls.label, over ? 'OVERFLY' : 'AVOID', d); }
       if (u.cls.quiet && !threat) continue; // a tree line is not a hundred targets: only trees by the track get a box
+      if (!layers.boxes) continue;
       const col = threat ? colors.accent : colors.ink;
       h2.globalAlpha = clamp((95 - d) / 20, 0, 1) * (threat || over ? 1 : 0.35);
       h2.strokeStyle = h2.fillStyle = col;
@@ -2496,11 +2552,81 @@
     h2.globalAlpha = 1;
   }
 
+  /* ----- decision log beside the view: each obstacle the planner reacts to, newest on top ----- */
+  const layers = { boxes: true, route: true, refs: true };
+  let logged = 0;
+  function logDecision(label, action, d) {
+    if (!logEl || !detailsOpen()) return;
+    if (!logged++) logEl.textContent = '';
+    const li = document.createElement('li'), t = Math.floor(time);
+    li.innerHTML = `<time>${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}</time><span></span><em></em>`;
+    li.children[1].textContent = `${label} · ${d.toFixed(0)}m`;
+    li.children[2].textContent = action;
+    li.children[2].className = action === 'AVOID' ? 'is-avoid' : '';
+    logEl.prepend(li);
+    while (logEl.children.length > 5) logEl.lastChild.remove();
+  }
+
+  /* ----- top view of the plan beside the view: the route ahead and what stands near it, the
+     platform at the bottom, travel upwards; across is scaled like along ----- */
+  let MW = 0, MH = 0;
+  function drawMap() {
+    if (!m2 || !MW || !detailsOpen()) return;
+    const back = 14, ahead = 120, k = (MH - 12) / (back + ahead), ox = MW / 2, oy = MH - 6 - back * k;
+    const cx = camera.position.x, ink = colors.fg || colors.ink;
+    const X = (x) => ox + (x - cx) * k, Y = (s) => oy - (s - dist) * k;
+    m2.clearRect(0, 0, MW, MH);
+    m2.font = '9px "JetBrains Mono", ui-monospace, monospace';
+    // range rings and the camera's field of view
+    m2.strokeStyle = m2.fillStyle = ink;
+    m2.globalAlpha = 0.18;
+    m2.lineWidth = 1;
+    [50, 100].forEach((r) => {
+      m2.beginPath(); m2.arc(ox, oy, r * k, Math.PI * 1.05, Math.PI * 1.95); m2.stroke();
+      m2.fillText(`${r}m`, ox + 4, oy - r * k - 3);
+    });
+    const half = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), reach = ahead * k;
+    m2.globalAlpha = 0.05;
+    m2.fillStyle = colors.accent;
+    m2.beginPath(); m2.moveTo(ox, oy);
+    m2.lineTo(ox - Math.sin(half) * reach, oy - Math.cos(half) * reach);
+    m2.lineTo(ox + Math.sin(half) * reach, oy - Math.cos(half) * reach);
+    m2.fill();
+    // objects: faint dots, those the route reacts to in orange
+    for (const o of objects) {
+      if (!o.visible) continue;
+      const u = o.userData, s = u.s;
+      if (s < dist - back || s > dist + ahead) continue;
+      const x = X(o.position.x);
+      if (x < -6 || x > MW + 6) continue;
+      const hot = u.thr > 0 && s - dist < 95;
+      m2.globalAlpha = hot ? 0.95 : u.cls.quiet ? 0.22 : 0.45;
+      m2.fillStyle = hot ? colors.accent : ink;
+      m2.beginPath(); m2.arc(x, Y(s), Math.max(1.6, Math.min(u.w * k, 7)), 0, Math.PI * 2); m2.fill();
+      if (hot && u.thr === 2) { m2.globalAlpha = 0.5; m2.strokeStyle = colors.accent; m2.beginPath(); m2.arc(x, Y(s), Math.max(1.6, Math.min(u.w * k, 7)) + 3.5, 0, Math.PI * 2); m2.stroke(); }
+    }
+    // the planned route
+    m2.globalAlpha = 0.95;
+    m2.strokeStyle = colors.accent;
+    m2.lineWidth = 1.5;
+    m2.setLineDash([5, 4]);
+    m2.beginPath();
+    for (let s = dist; s <= dist + ahead; s += 2) { const x = X(pathX(s)), y = Y(s); if (s === dist) m2.moveTo(x, y); else m2.lineTo(x, y); }
+    m2.stroke();
+    m2.setLineDash([]);
+    // the platform
+    m2.fillStyle = colors.accent;
+    m2.beginPath(); m2.moveTo(ox, oy - 8); m2.lineTo(ox + 5, oy + 5); m2.lineTo(ox, oy + 2); m2.lineTo(ox - 5, oy + 5); m2.closePath(); m2.fill();
+    m2.globalAlpha = 1;
+  }
+
   function render() {
     renderer.render(scene, camera);
     drawHud();
+    drawMap();
   }
 
+  const qBtns = document.querySelectorAll('[data-q]');
   function setQuality(level) {
     const was = Q;
     quality = level; Q = QUALITY[level];
@@ -2516,6 +2642,7 @@
       water.geometry.dispose(); water.geometry = waterGrid(...(Q.fine ? [200, 220] : [110, 130]));
     }
     LITTER.forEach(litterQuality);
+    qBtns.forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.q === level)));
   }
   // frame-rate watch: after a warm-up (models and shaders load then), average over 2 s windows
   let fpsWarm = 2, fpsFrames = 0, fpsTime = 0;
@@ -2526,16 +2653,22 @@
     if (fpsTime < 2) return;
     const fps = fpsFrames / fpsTime;
     fpsFrames = fpsTime = 0;
-    if (fps < 40 && quality > 0) { setQuality(quality - 1); fpsWarm = 1.5; }
+    if (fpsEl) fpsEl.textContent = `${Math.round(fps)} fps`;
+    if (!userQ && fps < Q.fps * 0.7 && quality > 0) { setQuality(quality - 1); fpsWarm = 1.5; }
   }
 
+  // frames are capped at the level's rate (a monitor at 144 Hz no longer means 144 renders a
+  // second); the simulation runs at the chosen speed in steps of at most 50 ms
+  let rate = 1;
   function frame(now) {
-    const raw = (now - last) / 1000, dt = clamp(raw, 0.001, 0.05);
-    last = now;
-    watchFps(raw);
-    update(dt);
-    render();
     raf = requestAnimationFrame(frame);
+    const gap = now - last;
+    if (gap < 1000 / Q.fps - 3) return;
+    last = now;
+    const raw = gap / 1000;
+    watchFps(raw);
+    for (let t = clamp(raw, 0.001, 0.1) * rate; t > 1e-4; t -= 0.05) update(Math.min(t, 0.05));
+    render();
   }
 
   // only run the loop while the demo is on screen, the tab is visible and it is not paused
@@ -2552,19 +2685,36 @@
     hud.width = W * DPR; hud.height = H * DPR;
     h2.setTransform(DPR, 0, 0, DPR, 0, 0);
     camera.aspect = W / H;
+    camera.fov = clamp(62 + (1.6 - camera.aspect) * 10, 62, 72); // a narrow view opens up a little so the sides still show
     camera.updateProjectionMatrix();
     if (!raf) render();
   }).observe(box);
+  if (map) new ResizeObserver(() => {
+    MW = map.clientWidth; MH = map.clientHeight;
+    map.width = MW * DPR; map.height = MH * DPR;
+    m2.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (!raf) drawMap();
+  }).observe(map);
 
   /* ----- demo controls ----- */
-  const playBtn = el('simPlay'), modeBtn = el('simMode');
+  const playBtn = el('simPlay');
+  const skyBtns = document.querySelectorAll('[data-sky]'), rateBtns = document.querySelectorAll('[data-rate]');
+  const press = (list, on) => list.forEach((b) => b.setAttribute('aria-pressed', String(on(b))));
   const syncUi = () => {
     playBtn.textContent = paused ? 'Play' : 'Pause';
-    modeBtn.textContent = day ? 'Day · SolarNav' : 'Night · StarNav';
+    press(skyBtns, (b) => (b.dataset.sky === 'day') === day);
+    press(rateBtns, (b) => +b.dataset.rate === rate);
   };
   playBtn.addEventListener('click', () => { paused = !paused; syncUi(); setRunning(); });
-  modeBtn.addEventListener('click', () => { day = !day; syncUi(); applyLook(); });
+  if (details) details.addEventListener('toggle', () => {
+    if (details.open) drawMap();
+  });
+  skyBtns.forEach((b) => b.addEventListener('click', () => { day = b.dataset.sky === 'day'; syncUi(); applyLook(); }));
+  rateBtns.forEach((b) => b.addEventListener('click', () => { rate = +b.dataset.rate; syncUi(); }));
+  qBtns.forEach((b) => b.addEventListener('click', () => { userQ = true; if (+b.dataset.q !== quality) setQuality(+b.dataset.q); fpsWarm = 1; }));
+  document.querySelectorAll('[data-layer]').forEach((c) => c.addEventListener('change', () => { layers[c.dataset.layer] = c.checked; if (!raf) render(); }));
   syncUi();
+  qBtns.forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.q === quality)));
 
   LITTER.forEach(litterQuality);
   setEnv(envName);
