@@ -1611,6 +1611,9 @@ a.hcard__foot:hover { color: var(--accent); }
 @media (max-width: 540px) {
   .demo__quick .dcard--row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 }
+@media (max-width: 640px) { /* fixed height + aspect-ratio shrank the view to ~2/3 width on phones */
+  .demo .game { width: 100%; height: auto; aspect-ratio: 4 / 5; }
+}
 .game__location { position: absolute; z-index: 2; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 10px 16px; min-height: 44px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--glass); backdrop-filter: blur(12px); color: var(--fg); font: 500 12px "JetBrains Mono", monospace; cursor: pointer; transition: border-color .2s, color .2s; white-space: nowrap; }
 .game__location:hover { color: var(--accent); border-color: var(--accent); }
 .game__location:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
